@@ -680,7 +680,7 @@ class Bullet extends Box {
                 if (health == 0) {
                     alert('You died!');
                     diedSound.play();
-                    window.location.href = '/';
+                    window.location.href = '/2023/';
                 }
             }
         } else {
