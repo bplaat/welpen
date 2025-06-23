@@ -1,8 +1,17 @@
+/*
+ * Copyright (c) 2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+import { Random } from './math.js';
+
 export default class PerlinNoise {
-    constructor(random) {
+    constructor(seed) {
+        const random = new Random(seed);
         this.permutation = new Array(256).fill(0).map((_, i) => i);
         for (let i = 255; i > 0; i--) {
-            const j = Math.floor(random() * (i + 1));
+            const j = Math.floor(random.next() * (i + 1));
             [this.permutation[i], this.permutation[j]] = [this.permutation[j], this.permutation[i]];
         }
         this.p = [...this.permutation, ...this.permutation];
