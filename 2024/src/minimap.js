@@ -3,14 +3,14 @@ import { Rect, Point } from './math.js';
 export default class Minimap {
     SIZE = 256;
     PADDING = 8;
-    COLORS = ['#a6e1f5', '#ecdcb8', '#27ae60', '#198a49', '#9ba6a6', '#ffdf99'];
+    COLORS = ['#a6e1f5', '#ecdcb8', '#27ae60', '#198a49', '#9ba6a6', '#ffdf99', '#d2704c', '#157da8', '#a6583c'];
 
     constructor(map, units, camera) {
         this.map = map;
         this.units = units;
         this.camera = camera;
         this.mouseDown = false;
-        this.sampleMinimap();
+        this.update();
 
         this.rect = new Rect(
             0,
@@ -26,7 +26,7 @@ export default class Minimap {
         );
     }
 
-    sampleMinimap() {
+    update() {
         this.minimap = new Uint8Array(this.map.width * this.map.height);
 
         // Mark tiles
@@ -44,11 +44,24 @@ export default class Minimap {
             if (unit.type === 'tree1' || unit.type === 'tree2') {
                 this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 3;
             }
+            if (unit.type === 'bushes') {
+                this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 6;
+            }
             if (unit.type === 'stone') {
                 this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 4;
             }
             if (unit.type === 'gold') {
                 this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 5;
+            }
+        }
+
+        // Mark player units
+        for (const unit of this.units) {
+            if (unit.player.name === 'Player') {
+                this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 7;
+            }
+            if (unit.player.name === 'Enemy') {
+                this.minimap[Math.floor(unit.y) * this.map.width + Math.floor(unit.x)] = 8;
             }
         }
     }

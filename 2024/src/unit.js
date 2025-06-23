@@ -6,35 +6,39 @@
 
 import { Rect } from './math.js';
 
-const townCenterImage = new Image();
-townCenterImage.src = 'images/units/town_center.png';
-const houseImage = new Image();
-houseImage.src = 'images/units/house.png';
-
+const villager1Image = new Image();
+villager1Image.src = 'images/units/blue/villager1.png';
+const villager2Image = new Image();
+villager2Image.src = 'images/units/blue/villager2.png';
 const kingImage = new Image();
-kingImage.src = 'images/units/king.png';
-const villagerImage = new Image();
-villagerImage.src = 'images/units/villager.png';
+kingImage.src = 'images/units/blue/king.png';
 const soldierImage = new Image();
-soldierImage.src = 'images/units/soldier.png';
+soldierImage.src = 'images/units/blue/soldier.png';
 const knightImage = new Image();
-knightImage.src = 'images/units/knight.png';
+knightImage.src = 'images/units/blue/knight.png';
+const townCenterImage = new Image();
+townCenterImage.src = 'images/units/blue/town_center.png';
+const houseImage = new Image();
+houseImage.src = 'images/units/blue/house.png';
+const barracksImage = new Image();
+barracksImage.src = 'images/units/blue/barracks.png';
 
 const tree1Image = new Image();
-tree1Image.src = 'images/units/tree1.png';
+tree1Image.src = 'images/units/nature/tree1.png';
 const tree2Image = new Image();
-tree2Image.src = 'images/units/tree2.png';
+tree2Image.src = 'images/units/nature/tree2.png';
 const bushesImage = new Image();
-bushesImage.src = 'images/units/bushes.png';
+bushesImage.src = 'images/units/nature/bushes.png';
 const stoneImage = new Image();
-stoneImage.src = 'images/units/stone.png';
+stoneImage.src = 'images/units/nature/stone.png';
 const goldImage = new Image();
-goldImage.src = 'images/units/gold.png';
+goldImage.src = 'images/units/nature/gold.png';
 
 export const unitTypes = {
     // Units
+    villager1: { image: villager1Image, name: 'Villager', boxScale: 0.5, health: 50, movable: true, speed: 2 },
+    villager2: { image: villager2Image, name: 'Villager', boxScale: 0.5, health: 50, movable: true, speed: 2 },
     king: { image: kingImage, name: 'King', boxScale: 0.5, health: 100, movable: true, speed: 4 },
-    villager: { image: villagerImage, name: 'Villager', boxScale: 0.5, health: 50, movable: true, speed: 2 },
     soldier: { image: soldierImage, name: 'Soldier', boxScale: 0.5, health: 75, movable: true, speed: 2 },
     knight: { image: knightImage, name: 'Knight', boxScale: 0.5, health: 150, movable: true, speed: 2 },
 
@@ -48,6 +52,7 @@ export const unitTypes = {
     // Buildings
     townCenter: { image: townCenterImage, name: 'Town Center', boxScale: 1, health: 1000, movable: false },
     house: { image: houseImage, name: 'House', boxScale: 1, health: 500, movable: false },
+    barracks: { image: barracksImage, name: 'Barracks', boxScale: 1, health: 600, movable: false },
 };
 
 export default class Unit {

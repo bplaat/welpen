@@ -7,7 +7,7 @@
 /*
 
 TODO:
-- Add units to minimap
+- Add unit right click
 - Add unit target other unit
 - Add path finding
 - Add population limit
@@ -56,22 +56,24 @@ class Player {
 }
 
 // MARK: Game state
-const player = new Player('Player', '#26f');
-const gaiaPlayer = new Player('Gaia', '#aaa');
-const enemy = new Player('Enemy', '#f00');
-const players = [gaiaPlayer, player, enemy];
+const naturePlayer = new Player('Nature', '#aaa');
+const player = new Player('Player', '#1ea7e1');
+const enemy = new Player('King Evil', '#a6583c');
+const players = [naturePlayer, player, enemy];
 
 const units = [];
 const map = new Map(64, 64, Date.now());
-map.generate(units, gaiaPlayer);
+map.generate(units, naturePlayer);
 
 const playerStartSpot = map.findStartPosition(units);
 units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'king', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y + 2, 'villager', player));
+units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y + 2, 'villager1', player));
+units.push(new Unit(playerStartSpot.x + 1.5, playerStartSpot.y + 2, 'villager2', player));
 units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'soldier', player));
 units.push(new Unit(playerStartSpot.x + 1.5, playerStartSpot.y, 'knight', player));
 units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y + 1, 'townCenter', player));
 units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 1, 'house', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 1, 'barracks', player));
 
 const camera = new Camera(playerStartSpot.x, playerStartSpot.y, 4);
 const controls = new Controls(camera, map, player, units);
@@ -111,6 +113,7 @@ function update(delta) {
     for (const player of players) {
         player.score += 1 * delta;
     }
+    minimap.update();
     controls.update(delta);
 }
 
@@ -197,10 +200,8 @@ function render() {
         }
 
         // Draw player scores
-        const sortedPlayers = players
-            .slice()
-            .filter((player) => player.name != 'Gaia')
-            .sort((a, b) => b.score - a.score);
+        ctx.font = 'bold 16px Arial';
+        const sortedPlayers = players.slice().sort((a, b) => b.score - a.score);
         for (let i = 0; i < sortedPlayers.length; i++) {
             const x = window.innerWidth - 150;
             const y = window.innerHeight - (i + 1) * 32;

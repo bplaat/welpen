@@ -56,7 +56,7 @@ export default class Map {
                 if (this.tiles[y * this.width + x] === 4 || this.tiles[y * this.width + x] === 5) {
                     const forestValue = noise.noise((x + 4000) / 20, (y + 4000) / 20);
                     if (forestValue > 0.1) {
-                        if (this.random.next() < 0.5) {
+                        if (this.random.next() < 0.8) {
                             const offsetX = this.random.nextInt(0, density) / density;
                             const offsetY = this.random.nextInt(0, density) / density;
                             units.push(
@@ -68,9 +68,21 @@ export default class Map {
                                 )
                             );
                         }
-                        if (this.random.next() < 0.3) {
-                            const offsetX = this.random.nextInt(0, density) / density;
-                            const offsetY = this.random.nextInt(0, density) / density;
+                    }
+                }
+            }
+        }
+
+        // Generate bushes in clusters
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                // Only place on grass tiles (4, 5)
+                if (this.tiles[y * this.width + x] === 4 || this.tiles[y * this.width + x] === 5) {
+                    const bushValue = noise.noise((x + 6000) / 15, (y + 6000) / 15);
+                    if (bushValue > 0.4) {
+                        const offsetX = this.random.nextInt(0, density) / density;
+                        const offsetY = this.random.nextInt(0, density) / density;
+                        if (this.random.next() < 0.2) {
                             units.push(new Unit(x + offsetX, y + offsetY, 'bushes', gaiaPlayer));
                         }
                     }
