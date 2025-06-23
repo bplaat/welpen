@@ -1,57 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Welpen Game 2023</title>
-    <link rel="icon" href="data:,">
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            font-size: 16px;
-            line-height: 1.5;
-            margin: 0;
-            background-color: #000;
-            color: #fff;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>Welpen Game 2023: Boederijleven</title>
+        <link rel="icon" href="data:," />
+        <style>
+            body {
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+                    'Open Sans', 'Helvetica Neue', sans-serif;
+                font-size: 16px;
+                line-height: 1.5;
+                margin: 0;
+                background-color: #000;
+                color: #fff;
+            }
 
-        canvas {
-            display: block
-        }
+            canvas {
+                display: block;
+            }
 
-        h1,
-        p {
-            margin: 0
-        }
+            h1,
+            p {
+                margin: 0;
+            }
 
-        #hud {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
+            #hud {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
 
-        #stats {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-        }
+            #stats {
+                position: absolute;
+                top: 1rem;
+                left: 1rem;
+            }
 
-        #tile {
-            margin-bottom: 0.5rem;
-        }
-    </style>
-    <script src="./stats.min.js"></script>
-</head>
-<body>
-    <div id="hud">
-        <div id="stats">
-            <h1 id="title">Welpen Game 2023</h1>
-            <p id="score">Score: 0</p>
-            <p id="highscore">High Score: ?</p>
+            #tile {
+                margin-bottom: 0.5rem;
+            }
+        </style>
+        <script src="./stats.min.js"></script>
+    </head>
+    <body>
+        <div id="hud">
+            <div id="stats">
+                <h1 id="title">Welpen Game 2023</h1>
+                <p id="score">Score: 0</p>
+                <p id="highscore">High Score: ?</p>
+            </div>
         </div>
-    </div>
-    <script type="module" src="./game.js"></script>
-</body>
+        <script type="module" src="./game.js"></script>
+    </body>
 </html>
