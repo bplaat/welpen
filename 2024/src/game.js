@@ -7,16 +7,24 @@
 /*
 
 TODO:
-- Add unit right click
-- Add unit target other unit
-- Add path finding
+- Add chat / cheats
+- Add menu / settings
+- Fix selection
+- Fix selection circles
+- Add unit double click
+- Add map zoom into cursor position
+
+- Add unit path finding
 - Add population limit
  - House increase population limit
 - Add unit actions
     - Villager build
     - Town center train villager
     - Barracks train soldier, knight
-- Add enemies spawn village attack
+- Add enemies spawn with wave system
+- Add unit target other unit
+- Add villager gather
+- Add unit attack
 
 */
 
@@ -66,16 +74,18 @@ const map = new Map(64, 64, Date.now());
 map.generate(units, naturePlayer);
 
 const playerStartSpot = map.findStartPosition(units);
-units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'king', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y + 2, 'villager1', player));
-units.push(new Unit(playerStartSpot.x + 1.5, playerStartSpot.y + 2, 'villager2', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'soldier', player));
-units.push(new Unit(playerStartSpot.x + 1.5, playerStartSpot.y, 'knight', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y + 1, 'townCenter', player));
-units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 1, 'house', player));
-units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 1, 'barracks', player));
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'villager1', player));
+units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'villager2', player));
 
-const camera = new Camera(playerStartSpot.x, playerStartSpot.y, 4);
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y, 'king', player));
+units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y, 'soldier', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y, 'knight', player));
+
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 3, 'house', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 3, 'townCenter', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 3, 'barracks', player));
+
+const camera = new Camera(playerStartSpot.x + 2, playerStartSpot.y + 2, 4);
 const controls = new Controls(camera, map, player, units);
 const minimap = new Minimap(map, units, camera);
 
@@ -113,6 +123,8 @@ function update(delta) {
     for (const player of players) {
         player.score += 1 * delta;
     }
+
+    map.update(units);
     minimap.update();
     controls.update(delta);
 }
@@ -122,12 +134,27 @@ function render() {
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
     // Draw map and units
-    map.draw(ctx, controls.camera);
+    map.drawTerrain(ctx, controls.camera);
     const sortedUnits = units.slice().sort((a, b) => a.y - b.y);
     for (const unit of sortedUnits) {
+        const tileX = Math.floor(unit.x);
+        const tileY = Math.floor(unit.y);
+
+        if (map.explored[tileY * map.width + tileX] === 0) {
+            continue;
+        }
+        if (
+            map.sight[tileY * map.width + tileX] === 0 &&
+            unit.player.name !== 'Player' &&
+            unit.player.name !== 'Nature'
+        ) {
+            continue;
+        }
+
         const isSelected = controls.selectedUnits.includes(unit);
         unit.draw(ctx, controls.camera, isSelected);
     }
+    map.drawFog(ctx, controls.camera);
 
     // Draw HUD
     {

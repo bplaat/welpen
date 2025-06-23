@@ -36,23 +36,145 @@ goldImage.src = 'images/units/nature/gold.png';
 
 export const unitTypes = {
     // Units
-    villager1: { image: villager1Image, name: 'Villager', boxScale: 0.5, health: 50, movable: true, speed: 2 },
-    villager2: { image: villager2Image, name: 'Villager', boxScale: 0.5, health: 50, movable: true, speed: 2 },
-    king: { image: kingImage, name: 'King', boxScale: 0.5, health: 100, movable: true, speed: 4 },
-    soldier: { image: soldierImage, name: 'Soldier', boxScale: 0.5, health: 75, movable: true, speed: 2 },
-    knight: { image: knightImage, name: 'Knight', boxScale: 0.5, health: 150, movable: true, speed: 2 },
+    villager1: {
+        image: villager1Image,
+        name: 'Villager',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 50,
+        movable: true,
+        speed: 2,
+        lineOfSight: 3,
+    },
+    villager2: {
+        image: villager2Image,
+        name: 'Villager',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 50,
+        movable: true,
+        speed: 2,
+        lineOfSight: 3,
+    },
+    king: {
+        image: kingImage,
+        name: 'King',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 100,
+        movable: true,
+        speed: 6,
+        lineOfSight: 5,
+    },
+    soldier: {
+        image: soldierImage,
+        name: 'Soldier',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 75,
+        movable: true,
+        speed: 2,
+        lineOfSight: 4,
+    },
+    knight: {
+        image: knightImage,
+        name: 'Knight',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 150,
+        movable: true,
+        speed: 2,
+        lineOfSight: 4,
+    },
 
     // Resources
-    tree1: { image: tree1Image, name: 'Tree', boxScale: 0.8, health: 100, givesResource: 'Wood', movable: false },
-    tree2: { image: tree2Image, name: 'Tree', boxScale: 0.8, health: 100, givesResource: 'Wood', movable: false },
-    bushes: { image: bushesImage, name: 'Bushes', boxScale: 0.5, health: 100, givesResource: 'Food', movable: false },
-    stone: { image: stoneImage, name: 'Stone', boxScale: 0.8, health: 200, givesResource: 'Stone', movable: false },
-    gold: { image: goldImage, name: 'Gold', boxScale: 0.8, health: 200, givesResource: 'Gold', movable: false },
+    tree1: {
+        image: tree1Image,
+        name: 'Tree',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.8 },
+        health: 100,
+        givesResource: 'Wood',
+        movable: false,
+    },
+    tree2: {
+        image: tree2Image,
+        name: 'Tree',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.8 },
+        health: 100,
+        givesResource: 'Wood',
+        movable: false,
+    },
+    bushes: {
+        image: bushesImage,
+        name: 'Bushes',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.6 },
+        health: 100,
+        givesResource: 'Food',
+        movable: false,
+    },
+    stone: {
+        image: stoneImage,
+        name: 'Stone',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 200,
+        givesResource: 'Stone',
+        movable: false,
+    },
+    gold: {
+        image: goldImage,
+        name: 'Gold',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        health: 200,
+        givesResource: 'Gold',
+        movable: false,
+    },
 
     // Buildings
-    townCenter: { image: townCenterImage, name: 'Town Center', boxScale: 1, health: 1000, movable: false },
-    house: { image: houseImage, name: 'House', boxScale: 1, health: 500, movable: false },
-    barracks: { image: barracksImage, name: 'Barracks', boxScale: 1, health: 600, movable: false },
+    townCenter: {
+        image: townCenterImage,
+        name: 'Town Center',
+        width: 2,
+        height: 2,
+        anchor: { x: 1, y: 1.93 },
+        health: 1000,
+        movable: false,
+        lineOfSight: 8,
+    },
+    house: {
+        image: houseImage,
+        name: 'House',
+        width: 2,
+        height: 2,
+        anchor: { x: 1, y: 1.75 },
+        health: 500,
+        movable: false,
+        lineOfSight: 6,
+    },
+    barracks: {
+        image: barracksImage,
+        name: 'Barracks',
+        width: 2,
+        height: 2,
+        anchor: { x: 1, y: 1.75 },
+        health: 600,
+        movable: false,
+        lineOfSight: 6,
+    },
 };
 
 export default class Unit {
@@ -115,38 +237,47 @@ export default class Unit {
         const unitType = unitTypes[this.type];
         ctx.drawImage(
             unitType.image,
-            window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - camera.tileSize / 2,
-            window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - camera.tileSize / 2,
-            camera.tileSize,
-            camera.tileSize
+            window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - unitType.anchor.x * camera.tileSize,
+            window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - unitType.anchor.y * camera.tileSize,
+            unitType.width * camera.tileSize,
+            unitType.height * camera.tileSize
+        );
+
+        // Draw unit hot point
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.fillRect(
+            window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - camera.tileSize / 20 / 2,
+            window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - camera.tileSize / 20 / 2,
+            camera.tileSize / 20,
+            camera.tileSize / 20
         );
 
         if (isSelected) {
-            const boxSize = camera.tileSize * unitType.boxScale;
+            const boxSize = unitType.width * camera.tileSize;
 
-            // Draw health bar
-            const healthBarWidth = boxSize / 2;
-            const healthBarHeight = boxSize * 0.05;
-            const healthBarRect = new Rect(
-                window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2 + healthBarWidth / 2,
-                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize / 2 - healthBarHeight - 8,
-                healthBarWidth,
-                healthBarHeight
-            );
-            ctx.fillStyle = '#000';
-            ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width + 2, healthBarRect.height + 2);
-            ctx.fillStyle = '#777';
-            ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width, healthBarRect.height);
+            // // Draw health bar
+            // const healthBarWidth = boxSize / 2;
+            // const healthBarHeight = boxSize * 0.05;
+            // const healthBarRect = new Rect(
+            //     window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2 + healthBarWidth / 2,
+            //     window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize / 2 - healthBarHeight - 8,
+            //     healthBarWidth,
+            //     healthBarHeight
+            // );
+            // ctx.fillStyle = '#000';
+            // ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width + 2, healthBarRect.height + 2);
+            // ctx.fillStyle = '#777';
+            // ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width, healthBarRect.height);
 
-            ctx.fillStyle = '#f00';
-            ctx.fillRect(healthBarRect.x, healthBarRect.y, healthBarRect.width, healthBarRect.height);
-            ctx.fillStyle = '#0f0';
-            ctx.fillRect(
-                healthBarRect.x,
-                healthBarRect.y,
-                healthBarRect.width * (this.health / unitTypes[this.type].health),
-                healthBarRect.height
-            );
+            // ctx.fillStyle = '#f00';
+            // ctx.fillRect(healthBarRect.x, healthBarRect.y, healthBarRect.width, healthBarRect.height);
+            // ctx.fillStyle = '#0f0';
+            // ctx.fillRect(
+            //     healthBarRect.x,
+            //     healthBarRect.y,
+            //     healthBarRect.width * (this.health / unitTypes[this.type].health),
+            //     healthBarRect.height
+            // );
 
             // Draw selection outline
             ctx.strokeStyle = '#777';
@@ -154,7 +285,7 @@ export default class Unit {
             ctx.beginPath();
             ctx.roundRect(
                 window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2 + 1,
-                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize / 2 + 1,
+                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize + 1,
                 boxSize,
                 boxSize,
                 boxSize / 4
@@ -164,7 +295,7 @@ export default class Unit {
             ctx.beginPath();
             ctx.roundRect(
                 window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2,
-                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize / 2,
+                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize,
                 boxSize,
                 boxSize,
                 boxSize / 4

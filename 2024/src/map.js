@@ -5,8 +5,9 @@
  */
 
 import PerlinNoise from './noise.js';
-import { Random } from './math.js';
+import { Random, Rect } from './math.js';
 import Unit from './unit.js';
+import { unitTypes } from './unit.js';
 
 const water1Image = new Image();
 water1Image.src = 'images/tiles/water1.png';
@@ -47,9 +48,11 @@ export default class Map {
                 }
             }
         }
+        this.explored = new Uint8Array(this.width * this.height);
+        this.sight = new Uint8Array(this.width * this.height);
 
         // Generate trees and bushes with noise-based density
-        const density = 5;
+        const density = 4;
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 // Only place trees and bushes on grass tiles (4, 5)
@@ -158,19 +161,81 @@ export default class Map {
                 }
             }
         }
-        return { x: startX + 2.5, y: startY + 2.5 };
+        return { x: startX + 2, y: startY + 2 };
     }
 
-    draw(ctx, camera) {
+    update(units) {
+        this.sight.fill(0);
+        for (const unit of units) {
+            if (unit.player.name === 'Player') {
+                const unitType = unitTypes[unit.type];
+                const lineOfSight = unitType.lineOfSight;
+                const startX = Math.max(0, Math.floor(unit.x - lineOfSight));
+                const startY = Math.max(0, Math.floor(unit.y - lineOfSight));
+                const endX = Math.min(this.width - 1, Math.ceil(unit.x + lineOfSight));
+                const endY = Math.min(this.height - 1, Math.ceil(unit.y + lineOfSight));
+                for (let y = startY; y <= endY; y++) {
+                    for (let x = startX; x <= endX; x++) {
+                        const dx = x - unit.x;
+                        const dy = y - unit.y;
+                        if (dx * dx + dy * dy <= lineOfSight * lineOfSight) {
+                            this.sight[y * this.width + x] = 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (let i = 0; i < this.explored.length; i++) {
+            if (this.sight[i] === 1) {
+                this.explored[i] = 1;
+            }
+        }
+    }
+
+    drawTerrain(ctx, camera) {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = 1;
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                ctx.drawImage(
-                    TILE_IMAGES[this.tiles[y * this.width + x]],
+                const tileRect = new Rect(
                     window.innerWidth / 2 + (x - camera.x) * camera.tileSize,
                     window.innerHeight / 2 + (y - camera.y) * camera.tileSize,
                     camera.tileSize,
                     camera.tileSize
                 );
+                if (this.explored[y * this.width + x] === 0) {
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
+                } else {
+                    ctx.drawImage(
+                        TILE_IMAGES[this.tiles[y * this.width + x]],
+                        tileRect.x,
+                        tileRect.y,
+                        tileRect.width,
+                        tileRect.height
+                    );
+                }
+                ctx.strokeRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
+            }
+        }
+    }
+
+    drawFog(ctx, camera) {
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const tileRect = new Rect(
+                    window.innerWidth / 2 + (x - camera.x) * camera.tileSize,
+                    window.innerHeight / 2 + (y - camera.y) * camera.tileSize,
+                    camera.tileSize,
+                    camera.tileSize
+                );
+                if (this.explored[y * this.width + x] === 1) {
+                    if (this.sight[y * this.width + x] === 0) {
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                        ctx.fillRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
+                    }
+                }
             }
         }
     }
