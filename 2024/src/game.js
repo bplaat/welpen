@@ -7,14 +7,18 @@
 /*
 
 TODO:
+- Add building actions
+- Add building gather point
 - Add unit actions
-    - Villager build
-    - Town center train villager
-    - Barracks train soldier, knight
+- Add villager actions
+
 - Add unit path finding
+- Add villager gather
+
+- Add localStorage save/load
+
 - Add enemies spawn with wave system
 - Add unit target other unit
-- Add villager gather
 - Add unit attack
 
 */
@@ -24,6 +28,8 @@ import Map from './map.js';
 import Unit, { unitTypes } from './unit.js';
 import Controls, { Camera } from './controls.js';
 import { Button, Menu } from './ui.js';
+import { Rect } from './math.js';
+import { img } from './utils.js';
 
 // MARK: Debug flag
 export let DEBUG = window.location.origin !== 'https://bplaat.github.io';
@@ -77,15 +83,23 @@ class Player {
             }
         }
 
-        // Calculate population limit based on houses
+        // Calculate population limit
         this.populationLimit = 0;
         for (const unit of units) {
-            if (unit.player === this && unit.type === 'house') {
-                this.populationLimit += 5;
+            const unitType = unitTypes[unit.type];
+            if (unit.player === this && unitType.populationLimit !== undefined) {
+                this.populationLimit += unitType.populationLimit;
             }
         }
     }
 }
+
+const actionImages = {
+    build: img('images/actions/build.png'),
+    repair: img('images/actions/repair.png'),
+    kill: img('images/actions/kill.png'),
+    stop: img('images/actions/stop.png'),
+};
 
 // MARK: Game state
 const naturePlayer = new Player('nature', 'Nature', 'nature');
@@ -211,16 +225,16 @@ function render(ctx) {
         ctx.textAlign = 'left';
 
         // Draw resources
-        const width = 600;
+        const width = 640;
         const x = window.innerWidth / 2 - width / 2;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(x, 0, width, 32);
         ctx.fillStyle = '#fff';
-        ctx.fillText(`Food: ${player.food}`, x + 10, 8);
-        ctx.fillText(`Wood: ${player.wood}`, x + 100, 8);
-        ctx.fillText(`Gold: ${player.gold}`, x + 200, 8);
-        ctx.fillText(`Stone: ${player.stone}`, x + 300, 8);
-        ctx.fillText(`Population: ${player.population} / ${player.populationLimit}`, x + 400, 8);
+        ctx.fillText(`Wood: ${player.wood}`, x + 10, 8);
+        ctx.fillText(`Food: ${player.food}`, x + 120, 8);
+        ctx.fillText(`Gold: ${player.gold}`, x + 240, 8);
+        ctx.fillText(`Stone: ${player.stone}`, x + 360, 8);
+        ctx.fillText(`Population: ${player.population} / ${player.populationLimit}`, x + 480, 8);
 
         menuButton.render(ctx);
         minimap.render(ctx);
@@ -230,21 +244,38 @@ function render(ctx) {
             const unit = controls.selectedUnits[0];
             const unitType = unitTypes[unit.type];
 
-            const width = 8 + 64 + 16 + 240;
-            const x = window.innerWidth / 2 - width / 2;
-            const y = window.innerHeight - 80;
+            const width = 640;
+            const height = (48 + 8) * 3 + 8;
+            const rect = new Rect(window.innerWidth / 2 - width / 2, window.innerHeight - height, width, height);
+
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.fillRect(x, y, width, 80);
-            ctx.drawImage(unit.image(), x + 8, y + 8, 64, 64);
-            ctx.fillStyle = unit.player.color;
-            ctx.textAlign = 'left';
-            ctx.fillText(`${unitType.name} (${unit.player.name})`, x + 8 + 64 + 16, y + 24);
-            ctx.fillStyle = '#fff';
-            ctx.fillText(
-                `${unitType.givesResource ?? 'Health'}: ${unit.health} / ${unitType.health}`,
-                x + 8 + 64 + 16,
-                y + 24 + 16 + 8
-            );
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+
+            // Draw actions
+            for (let y = 0; y < 3; y++) {
+                for (let x = 0; x < 4; x++) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                    ctx.fillRect(rect.x + x * (48 + 8) + 8, rect.y + y * (48 + 8) + 8, 48, 48);
+                }
+            }
+            if (unitType.type === 'building') {
+                for (const action of unitType.actions) {
+                }
+            }
+
+            // // Draw unit information
+            // ctx.drawImage(unit.image(), rect.x + 8, rect.y + 8, 64 * unitType.width, 64 * unitType.height);
+
+            // ctx.textAlign = 'left';
+            // ctx.fillStyle = `#${Minimap.PLAYER_COLORS[unit.player.color].toString(16).padStart(6, '0')}`;
+            // ctx.fillText(`${unitType.name} (${unit.player.name})`, x + 8 + 64 + 16, y + 24);
+
+            // ctx.fillStyle = '#fff';
+            // ctx.fillText(
+            //     `${unitType.givesResource ?? 'Health'}: ${unit.health} / ${unitType.health}`,
+            //     x + 8 + 64 + 16,
+            //     y + 24 + 16 + 8
+            // );
         }
         if (controls.selectedUnits.length > 1) {
             const maxColumns = 8;
@@ -273,8 +304,11 @@ function render(ctx) {
 
         // Draw player scores
         ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'right';
-        const sortedPlayers = players.slice().sort((a, b) => b.score - a.score);
+        ctx.textAlign = 'left';
+        const sortedPlayers = players
+            .slice()
+            .filter((player) => player.type != 'nature')
+            .sort((a, b) => b.score - a.score);
         for (let i = 0; i < sortedPlayers.length; i++) {
             const x = window.innerWidth - 150;
             const y = window.innerHeight - (i + 1) * 32;
@@ -282,7 +316,7 @@ function render(ctx) {
             ctx.fillRect(x, y, 160, 32);
 
             ctx.fillStyle = `#${Minimap.PLAYER_COLORS[sortedPlayers[i].color].toString(16).padStart(6, '0')}`;
-            ctx.fillText(`${sortedPlayers[i].name}: ${Math.floor(sortedPlayers[i].score)}`, x + 150 - 8, y + 8);
+            ctx.fillText(`${sortedPlayers[i].name}: ${Math.floor(sortedPlayers[i].score)}`, x + 8, y + 16);
         }
 
         // Draw controls

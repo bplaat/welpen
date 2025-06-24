@@ -51,73 +51,73 @@ const unitImages = {
 export const unitTypes = {
     // Units
     villager: {
+        type: 'unit',
         name: 'Villager',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 50,
-        movable: true,
         speed: 2,
-        lineOfSight: 3,
+        lineOfSight: 4,
         population: 1,
     },
     king: {
+        type: 'unit',
         name: 'King',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 100,
-        movable: true,
         speed: 4,
-        lineOfSight: 5,
+        lineOfSight: 6,
         population: 0,
     },
     spearman: {
+        type: 'unit',
         name: 'Spearman',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 75,
-        movable: true,
         speed: 2,
         lineOfSight: 4,
         population: 1,
     },
     knight: {
+        type: 'unit',
         name: 'Knight',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 150,
-        movable: true,
         speed: 2,
         lineOfSight: 4,
         population: 2,
     },
     scout: {
+        type: 'unit',
         name: 'Scout',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 150,
-        movable: true,
         speed: 6,
-        lineOfSight: 10,
+        lineOfSight: 8,
         population: 1,
     },
     monk: {
+        type: 'unit',
         name: 'Monk',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 150,
-        movable: true,
         speed: 2,
         lineOfSight: 5,
         population: 1,
@@ -125,6 +125,7 @@ export const unitTypes = {
 
     // Resources
     tree: {
+        type: 'resource',
         name: 'Tree',
         width: 1,
         height: 1,
@@ -132,9 +133,9 @@ export const unitTypes = {
         collision: { x: 0.35, y: 0.35, w: 0.3, h: 0.675 },
         health: 100,
         givesResource: 'Wood',
-        movable: false,
     },
     bushes: {
+        type: 'resource',
         name: 'Bushes',
         width: 1,
         height: 1,
@@ -142,9 +143,9 @@ export const unitTypes = {
         collision: { x: 0.35, y: 0.675, w: 0.3, h: 0.35 },
         health: 100,
         givesResource: 'Food',
-        movable: false,
     },
     stone: {
+        type: 'resource',
         name: 'Stone',
         width: 1,
         height: 1,
@@ -152,9 +153,9 @@ export const unitTypes = {
         collision: { x: 0.2, y: 0.55, w: 0.6, h: 0.575 },
         health: 200,
         givesResource: 'Stone',
-        movable: false,
     },
     gold: {
+        type: 'resource',
         name: 'Gold',
         width: 1,
         height: 1,
@@ -162,69 +163,82 @@ export const unitTypes = {
         collision: { x: 0.2, y: 0.55, w: 0.6, h: 0.575 },
         health: 200,
         givesResource: 'Gold',
-        movable: false,
     },
 
     // Buildings
     townCenter: {
+        type: 'building',
         name: 'Town Center',
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.93 },
         collision: { x: 0.3, y: 0.15, w: 1.4, h: 1.85 },
         health: 1000,
-        movable: false,
         lineOfSight: 8,
+        actions: [
+            { x: 0, y: 0, image: 'villager', name: 'Villager', cost: { food: 50 } },
+            { x: 1, y: 0, image: 'scout', name: 'Scout', cost: { food: 100 } },
+        ],
+        populationLimit: 10,
     },
     house: {
+        type: 'building',
         name: 'House',
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.75 },
         collision: { x: 0.3, y: 0.5, w: 1.4, h: 1.5 },
-        health: 500,
-        movable: false,
+        health: 250,
         lineOfSight: 6,
+        actions: [],
+        populationLimit: 5,
     },
     barracks: {
+        type: 'building',
         name: 'Barracks',
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.75 },
         collision: { x: 0.2, y: 0.5, w: 1.6, h: 1.5 },
         health: 600,
-        movable: false,
         lineOfSight: 6,
+        actions: [
+            { x: 0, y: 0, image: 'spearman', name: 'Spearman', cost: { wood: 50, food: 50 } },
+            { x: 1, y: 0, image: 'knight', name: 'Knight', cost: { food: 100, gold: 75 } },
+        ],
     },
     storeHouse: {
+        type: 'building',
         name: 'Store House',
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.95 },
         collision: { x: 0.1, y: 0.1, w: 1.8, h: 1.9 },
         health: 500,
-        movable: false,
         lineOfSight: 6,
+        actions: [],
     },
     church: {
+        type: 'building',
         name: 'Church',
         width: 2,
         height: 4,
         anchor: { x: 1, y: 3.1 },
         collision: { x: 0.3, y: 1.75, w: 1.4, h: 2.3 },
         health: 600,
-        movable: false,
         lineOfSight: 6,
+        actions: [{ x: 0, y: 0, image: 'monk', name: 'Monk', cost: { food: 100, gold: 200 } }],
     },
     tower: {
+        type: 'building',
         name: 'Tower',
         width: 2,
         height: 4,
         anchor: { x: 1, y: 3.3 },
         collision: { x: 0.3, y: 1.4, w: 1.4, h: 2.6 },
         health: 800,
-        movable: false,
         lineOfSight: 12,
+        actions: [],
     },
 };
 
@@ -240,11 +254,12 @@ export default class Unit {
         }
         this.player = player;
         this.health = unitTypes[type].health;
+        this.flipX = false;
     }
 
     update(delta, units, map) {
         const unitType = unitTypes[this.type];
-        if (unitType.movable && this.target) {
+        if (unitType.type === 'unit' && this.target) {
             const dx = this.target.x - this.x;
             const dy = this.target.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -252,6 +267,8 @@ export default class Unit {
                 const speed = unitType.speed * delta;
                 let newX = this.x + (dx / distance) * speed;
                 let newY = this.y + (dy / distance) * speed;
+
+                this.flipX = dx < 0;
 
                 // Check map bounds
                 if (newX < 0) newX = 0;
@@ -314,13 +331,26 @@ export default class Unit {
     draw(ctx, camera, isSelected) {
         // Draw unit image
         const unitType = unitTypes[this.type];
-        ctx.drawImage(
-            this.image(),
-            window.innerWidth / 2 + (this.x - camera.x - unitType.anchor.x) * camera.tileSize,
-            window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
-            unitType.width * camera.tileSize,
-            unitType.height * camera.tileSize
-        );
+        if (this.flipX) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+                this.image(),
+                -(window.innerWidth / 2 + (this.x - camera.x + unitType.anchor.x) * camera.tileSize),
+                window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
+                unitType.width * camera.tileSize,
+                unitType.height * camera.tileSize
+            );
+            ctx.restore();
+        } else {
+            ctx.drawImage(
+                this.image(),
+                window.innerWidth / 2 + (this.x - camera.x - unitType.anchor.x) * camera.tileSize,
+                window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
+                unitType.width * camera.tileSize,
+                unitType.height * camera.tileSize
+            );
+        }
 
         const collisionRect = new Rect(
             window.innerWidth / 2 + (this.x - camera.x - unitType.width / 2 + unitType.collision.x) * camera.tileSize,
@@ -343,6 +373,29 @@ export default class Unit {
                 camera.tileSize / 20,
                 camera.tileSize / 20
             );
+
+            if (this.target) {
+                // Draw line to target
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(
+                    window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize,
+                    window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize
+                );
+                ctx.lineTo(
+                    window.innerWidth / 2 + (this.target.x - camera.x) * camera.tileSize,
+                    window.innerHeight / 2 + (this.target.y - camera.y) * camera.tileSize
+                );
+                ctx.stroke();
+
+                // Draw target point
+                ctx.fillRect(
+                    window.innerWidth / 2 + (this.target.x - camera.x) * camera.tileSize - camera.tileSize / 20 / 2,
+                    window.innerHeight / 2 + (this.target.y - camera.y) * camera.tileSize - camera.tileSize / 20 / 2,
+                    camera.tileSize / 20,
+                    camera.tileSize / 20
+                );
+            }
         }
 
         if (isSelected) {

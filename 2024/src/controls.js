@@ -30,7 +30,6 @@ export default class Controls {
         this.selectedUnits = [];
 
         this.lastClickTime = 0;
-
         this.pressedKeys = {};
     }
 
@@ -77,7 +76,7 @@ export default class Controls {
             this.selectedUnits = [];
             for (const unit of this.units) {
                 const unitType = unitTypes[unit.type];
-                if (!singleClick && (unit.player !== this.player || !unitType.movable)) continue;
+                if (!singleClick && (unit.player !== this.player || unitType.type !== 'unit')) continue;
                 const collisionRect = new Rect(
                     window.innerWidth / 2 +
                         (unit.x - this.camera.x - unitType.width / 2 + unitType.collision.x) * this.camera.tileSize,
@@ -92,6 +91,7 @@ export default class Controls {
                 }
             }
 
+            // Support unit double click selection
             if (singleClick && performance.now() - this.lastClickTime < 300 && this.selectedUnits.length > 0) {
                 const selectedType = this.selectedUnits[0].type;
                 this.selectedUnits = this.units.filter((unit) => {
@@ -120,7 +120,7 @@ export default class Controls {
             );
             for (const unit of this.selectedUnits) {
                 const unitType = unitTypes[unit.type];
-                if (unitType.movable) {
+                if (unitType.type === 'unit') {
                     unit.target = target;
                 }
             }
@@ -131,24 +131,20 @@ export default class Controls {
 
     onWheel(event) {
         const delta = event.deltaY < 0 ? 1 : -1;
-        const oldTileSize = this.camera.tileSize;
 
-        // Store cursor position relative to world before zoom
-        const cursorWorldX = (event.clientX - window.innerWidth / 2) / oldTileSize + this.camera.x;
-        const cursorWorldY = (event.clientY - window.innerHeight / 2) / oldTileSize + this.camera.y;
+        const cursorWorldX = (event.clientX - window.innerWidth / 2) / this.camera.tileSize + this.camera.x;
+        const cursorWorldY = (event.clientY - window.innerHeight / 2) / this.camera.tileSize + this.camera.y;
 
-        // Update zoom level
         this.camera.zoomLevel = Math.max(0, Math.min(TILE_SIZES.length - 1, this.camera.zoomLevel + delta));
         this.camera.tileSize = TILE_SIZES[this.camera.zoomLevel];
 
-        // Adjust camera position to keep cursor at the same world position
         this.camera.x = cursorWorldX - (event.clientX - window.innerWidth / 2) / this.camera.tileSize;
         this.camera.y = cursorWorldY - (event.clientY - window.innerHeight / 2) / this.camera.tileSize;
         return true;
     }
 
     update(delta) {
-        const cameraSpeed = (1 / (this.camera.zoomLevel + 1)) * 20;
+        const cameraSpeed = (1 / (this.camera.zoomLevel + 1)) * 30;
         if (this.pressedKeys['ArrowLeft'] || this.pressedKeys['a']) {
             this.camera.x -= cameraSpeed * delta;
         }

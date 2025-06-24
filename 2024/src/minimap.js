@@ -23,14 +23,14 @@ export default class Minimap {
         this.camera = camera;
         this.controls = controls;
         this.mouseDown = false;
+        this.minimap = new Uint32Array(this.map.width * this.map.height);
         this.update();
         this.onResize();
     }
 
     update() {
-        this.minimap = new Uint32Array(this.map.width * this.map.height);
-
         // Mark tiles
+        this.minimap.fill(0x222222);
         for (let y = 0; y < this.map.height; y++) {
             for (let x = 0; x < this.map.width; x++) {
                 if (DEBUG || this.map.explored[y * this.map.width + x] === 1) {
@@ -38,8 +38,6 @@ export default class Minimap {
                     if (tile === 0 || tile === 1) this.minimap[y * this.map.width + x] = 0xa6e1f5;
                     if (tile === 2 || tile === 3) this.minimap[y * this.map.width + x] = 0xecdcb8;
                     if (tile === 4 || tile === 5) this.minimap[y * this.map.width + x] = 0x27ae60;
-                } else {
-                    this.minimap[y * this.map.width + x] = 0x222222;
                 }
             }
         }
@@ -57,9 +55,9 @@ export default class Minimap {
 
         // Mark player units
         for (const unit of this.units) {
-            const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
-            if (this.map.sight[index] === 1) {
-                if (unit.player.type !== 'nature') {
+            if (unit.player.type !== 'nature') {
+                const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
+                if (this.map.sight[index] === 1) {
                     this.minimap[index] = Minimap.PLAYER_COLORS[unit.player.color];
                 }
             }
@@ -117,7 +115,7 @@ export default class Minimap {
                 );
                 for (const unit of this.controls.selectedUnits) {
                     const unitType = unitTypes[unit.type];
-                    if (unitType.movable) {
+                    if (unitType.type === 'unit') {
                         unit.target = target;
                     }
                 }
