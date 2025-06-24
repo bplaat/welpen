@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Rect } from './math.js';
+import { Rect, Random } from './math.js';
 import { DEBUG } from './game.js';
 
 const villager1Image = new Image();
@@ -37,20 +37,8 @@ goldImage.src = 'images/units/nature/gold.png';
 
 export const unitTypes = {
     // Units
-    villager1: {
-        image: villager1Image,
-        name: 'Villager',
-        width: 1,
-        height: 1,
-        anchor: { x: 0.5, y: 0.675 },
-        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
-        health: 50,
-        movable: true,
-        speed: 2,
-        lineOfSight: 3,
-    },
-    villager2: {
-        image: villager2Image,
+    villager: {
+        images: [villager1Image, villager2Image],
         name: 'Villager',
         width: 1,
         height: 1,
@@ -191,11 +179,16 @@ export const unitTypes = {
     },
 };
 
+const random = new Random(Date.now());
+
 export default class Unit {
     constructor(x, y, type, player) {
         this.x = x;
         this.y = y;
         this.type = type;
+        if (this.type == 'villager') {
+            this.variant = random.nextInt(0, 1);
+        }
         this.player = player;
         this.health = unitTypes[type].health;
     }
@@ -254,11 +247,19 @@ export default class Unit {
         }
     }
 
+    image() {
+        const unitType = unitTypes[this.type];
+        if (this.type === 'villager') {
+            return unitType.images[this.variant];
+        }
+        return unitType.image;
+    }
+
     draw(ctx, camera, isSelected) {
         // Draw unit image
         const unitType = unitTypes[this.type];
         ctx.drawImage(
-            unitType.image,
+            this.image(),
             window.innerWidth / 2 + (this.x - camera.x - unitType.anchor.x) * camera.tileSize,
             window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
             unitType.width * camera.tileSize,

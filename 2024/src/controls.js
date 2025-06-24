@@ -29,6 +29,8 @@ export default class Controls {
         this.dragCurrent = null;
         this.selectedUnits = [];
 
+        this.lastClickTime = 0;
+
         this.pressedKeys = {};
     }
 
@@ -63,9 +65,9 @@ export default class Controls {
     onMouseUp(event) {
         if (this.isDragging) {
             this.isDragging = false;
+            const singleClick = this.dragStart.equals(this.dragCurrent);
 
             // Select all units in drag rect
-            let singleClick = this.dragStart.equals(this.dragCurrent);
             const selectedRect = new Rect(
                 Math.min(this.dragStart.x, this.dragCurrent.x),
                 Math.min(this.dragStart.y, this.dragCurrent.y),
@@ -89,18 +91,37 @@ export default class Controls {
                     if (singleClick) break;
                 }
             }
+
+            if (singleClick && performance.now() - this.lastClickTime < 300 && this.selectedUnits.length > 0) {
+                const selectedType = this.selectedUnits[0].type;
+                this.selectedUnits = this.units.filter((unit) => {
+                    if (unit.type !== selectedType || unit.player !== this.player) return false;
+                    const unitType = unitTypes[unit.type];
+                    const collisionRect = new Rect(
+                        window.innerWidth / 2 +
+                            (unit.x - this.camera.x - unitType.width / 2 + unitType.collision.x) * this.camera.tileSize,
+                        window.innerHeight / 2 +
+                            (unit.y - this.camera.y - unitType.height + unitType.collision.y) * this.camera.tileSize,
+                        unitType.collision.w * this.camera.tileSize,
+                        unitType.collision.h * this.camera.tileSize
+                    );
+                    return collisionRect.intersects(new Rect(0, 0, window.innerWidth, window.innerHeight));
+                });
+            }
+
+            this.lastClickTime = performance.now();
             return true;
         }
+
         if (event.button === 2 && this.selectedUnits.length > 0) {
+            const target = new Point(
+                (event.clientX - window.innerWidth / 2 + this.camera.x * this.camera.tileSize) / this.camera.tileSize,
+                (event.clientY - window.innerHeight / 2 + this.camera.y * this.camera.tileSize) / this.camera.tileSize
+            );
             for (const unit of this.selectedUnits) {
                 const unitType = unitTypes[unit.type];
                 if (unitType.movable) {
-                    unit.target = new Point(
-                        (event.clientX - window.innerWidth / 2 + this.camera.x * this.camera.tileSize) /
-                            this.camera.tileSize,
-                        (event.clientY - window.innerHeight / 2 + this.camera.y * this.camera.tileSize) /
-                            this.camera.tileSize
-                    );
+                    unit.target = target;
                 }
             }
             return true;
@@ -110,8 +131,19 @@ export default class Controls {
 
     onWheel(event) {
         const delta = event.deltaY < 0 ? 1 : -1;
+        const oldTileSize = this.camera.tileSize;
+
+        // Store cursor position relative to world before zoom
+        const cursorWorldX = (event.clientX - window.innerWidth / 2) / oldTileSize + this.camera.x;
+        const cursorWorldY = (event.clientY - window.innerHeight / 2) / oldTileSize + this.camera.y;
+
+        // Update zoom level
         this.camera.zoomLevel = Math.max(0, Math.min(TILE_SIZES.length - 1, this.camera.zoomLevel + delta));
         this.camera.tileSize = TILE_SIZES[this.camera.zoomLevel];
+
+        // Adjust camera position to keep cursor at the same world position
+        this.camera.x = cursorWorldX - (event.clientX - window.innerWidth / 2) / this.camera.tileSize;
+        this.camera.y = cursorWorldY - (event.clientY - window.innerHeight / 2) / this.camera.tileSize;
         return true;
     }
 

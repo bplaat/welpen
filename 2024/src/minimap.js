@@ -6,15 +6,17 @@
 
 import { Rect, Point } from './math.js';
 import { DEBUG } from './game.js';
+import { unitTypes } from './unit.js';
 
 export default class Minimap {
     SIZE = 256;
     PADDING = 8;
 
-    constructor(map, units, camera) {
+    constructor(map, units, camera, controls) {
         this.map = map;
         this.units = units;
         this.camera = camera;
+        this.controls = controls;
         this.mouseDown = false;
         this.update();
         this.onResize();
@@ -87,9 +89,11 @@ export default class Minimap {
 
     onMouseDown(event) {
         if (this.rect.contains(new Point(event.clientX, event.clientY))) {
-            this.mouseDown = true;
-            this.camera.x = ((event.clientX - this.minimapRect.x) / this.minimapRect.width) * this.map.width;
-            this.camera.y = ((event.clientY - this.minimapRect.y) / this.minimapRect.height) * this.map.height;
+            if (event.button === 0) {
+                this.mouseDown = true;
+                this.camera.x = ((event.clientX - this.minimapRect.x) / this.minimapRect.width) * this.map.width;
+                this.camera.y = ((event.clientY - this.minimapRect.y) / this.minimapRect.height) * this.map.height;
+            }
             return true;
         }
         return false;
@@ -108,7 +112,22 @@ export default class Minimap {
 
     onMouseUp(event) {
         if (this.rect.contains(new Point(event.clientX, event.clientY))) {
-            this.mouseDown = false;
+            if (this.mouseDown) {
+                this.mouseDown = false;
+            }
+
+            if (event.button === 2) {
+                const target = new Point(
+                    ((event.clientX - this.minimapRect.x) / this.minimapRect.width) * this.map.width,
+                    ((event.clientY - this.minimapRect.y) / this.minimapRect.height) * this.map.height
+                );
+                for (const unit of this.controls.selectedUnits) {
+                    const unitType = unitTypes[unit.type];
+                    if (unitType.movable) {
+                        unit.target = target;
+                    }
+                }
+            }
             return true;
         }
         return false;

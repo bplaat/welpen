@@ -7,9 +7,6 @@
 /*
 
 TODO:
-- Add unit double click
-- Add map zoom into cursor position
-
 - Add unit path finding
 - Add population limit
  - House increase population limit
@@ -76,12 +73,15 @@ const map = new Map(64, 64, Date.now());
 map.generate(units, naturePlayer);
 
 const playerStartSpot = map.findStartPosition(units);
-units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'villager1', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'villager2', player));
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'villager', player));
+units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'villager', player));
 
 units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y, 'king', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 0.5, 'king', player));
 units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y, 'soldier', player));
+units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y + 0.5, 'soldier', player));
 units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y, 'knight', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 0.5, 'knight', player));
 
 units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 3, 'house', player));
 units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 3, 'townCenter', player));
@@ -94,7 +94,7 @@ const menu = new Menu();
 if (!DEBUG) menu.show();
 
 const menuButton = new Button('Menu', () => menu.show(), window.innerWidth - 150, 0, 150, 32);
-const minimap = new Minimap(map, units, camera);
+const minimap = new Minimap(map, units, camera, controls);
 
 // MARK: Event listeners
 window.addEventListener('resize', (event) => {
@@ -204,7 +204,7 @@ function render() {
             const y = window.innerHeight - 80;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
             ctx.fillRect(x, y, width, 80);
-            ctx.drawImage(unitType.image, x + 8, y + 8, 64, 64);
+            ctx.drawImage(unit.image(), x + 8, y + 8, 64, 64);
             ctx.fillStyle = unit.player.color;
             ctx.textAlign = 'left';
             ctx.fillText(`${unitType.name} (${unit.player.name})`, x + 8 + 64 + 16, y + 24);
@@ -236,7 +236,7 @@ function render() {
                 const row = Math.floor(i / columns);
                 const unitX = x + padding + col * (unitSize + padding);
                 const unitY = y + padding + row * (unitSize + padding);
-                ctx.drawImage(unitType.image, unitX, unitY, unitSize, unitSize);
+                ctx.drawImage(unit.image(), unitX, unitY, unitSize, unitSize);
             }
         }
 
