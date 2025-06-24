@@ -7,10 +7,6 @@
 /*
 
 TODO:
-- Add chat / cheats
-- Add menu / settings
-- Fix selection
-- Fix selection circles
 - Add unit double click
 - Add map zoom into cursor position
 
@@ -32,6 +28,12 @@ import Minimap from './minimap.js';
 import Map from './map.js';
 import Unit, { unitTypes } from './unit.js';
 import Controls, { Camera } from './controls.js';
+import { Button, Menu } from './ui.js';
+
+export let DEBUG = window.location !== 'https://bplaat.github.io/welpen/';
+export function setDebug(value) {
+    DEBUG = value;
+}
 
 // MARK: Canvas
 const canvas = document.createElement('canvas');
@@ -87,9 +89,19 @@ units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 3, 'barracks', pl
 
 const camera = new Camera(playerStartSpot.x + 2, playerStartSpot.y + 2, 4);
 const controls = new Controls(camera, map, player, units);
+
+const menu = new Menu();
+if (!DEBUG) menu.show();
+
+const menuButton = new Button('Menu', () => menu.show(), window.innerWidth - 150, 0, 150, 32);
 const minimap = new Minimap(map, units, camera);
 
 // MARK: Event listeners
+window.addEventListener('resize', (event) => {
+    menuButton.rect.x = window.innerWidth - 150;
+    menu.onResize();
+    minimap.onResize();
+});
 window.addEventListener('keydown', (event) => {
     if (controls.onKeyDown(event)) return;
 });
@@ -98,16 +110,22 @@ window.addEventListener('keyup', (event) => {
 });
 window.addEventListener('mousedown', (event) => {
     event.preventDefault();
+    if (menu.onMouseDown(event)) return;
+    if (menuButton.onMouseDown(event)) return;
     if (minimap.onMouseDown(event)) return;
     if (controls.onMouseDown(event)) return;
 });
 window.addEventListener('mousemove', (event) => {
     event.preventDefault();
+    if (menu.onMouseMove(event)) return;
+    if (menuButton.onMouseMove(event)) return;
     if (minimap.onMouseMove(event)) return;
     if (controls.onMouseMove(event)) return;
 });
 window.addEventListener('mouseup', (event) => {
     event.preventDefault();
+    if (menu.onMouseUp(event)) return;
+    if (menuButton.onMouseUp(event)) return;
     if (minimap.onMouseUp(event)) return;
     if (controls.onMouseUp(event)) return;
 });
@@ -140,7 +158,7 @@ function render() {
         const tileX = Math.floor(unit.x);
         const tileY = Math.floor(unit.y);
 
-        if (map.explored[tileY * map.width + tileX] === 0) {
+        if (!DEBUG && map.explored[tileY * map.width + tileX] === 0) {
             continue;
         }
         if (
@@ -162,12 +180,6 @@ function render() {
         ctx.textBaseline = 'top';
         ctx.textAlign = 'left';
 
-        // Draw game title
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(0, 0, 230, 32);
-        ctx.fillStyle = '#fff';
-        ctx.fillText('Welpen Game 2024: Ridders', 8, 8);
-
         // Draw resources
         const width = 400;
         const x = window.innerWidth / 2 - width / 2;
@@ -179,6 +191,7 @@ function render() {
         ctx.fillText(`Gold: ${player.gold}`, x + 200, 8);
         ctx.fillText(`Stone: ${player.stone}`, x + 300, 8);
 
+        menuButton.render(ctx);
         minimap.render(ctx);
 
         // Draw selected units information
@@ -193,6 +206,7 @@ function render() {
             ctx.fillRect(x, y, width, 80);
             ctx.drawImage(unitType.image, x + 8, y + 8, 64, 64);
             ctx.fillStyle = unit.player.color;
+            ctx.textAlign = 'left';
             ctx.fillText(`${unitType.name} (${unit.player.name})`, x + 8 + 64 + 16, y + 24);
             ctx.fillStyle = '#fff';
             ctx.fillText(
@@ -228,6 +242,7 @@ function render() {
 
         // Draw player scores
         ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'right';
         const sortedPlayers = players.slice().sort((a, b) => b.score - a.score);
         for (let i = 0; i < sortedPlayers.length; i++) {
             const x = window.innerWidth - 150;
@@ -235,11 +250,14 @@ function render() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
             ctx.fillRect(x, y, 160, 32);
             ctx.fillStyle = sortedPlayers[i].color;
-            ctx.fillText(`${sortedPlayers[i].name}: ${Math.floor(sortedPlayers[i].score)}`, x + 8, y + 8);
+            ctx.fillText(`${sortedPlayers[i].name}: ${Math.floor(sortedPlayers[i].score)}`, x + 150 - 8, y + 8);
         }
 
         // Draw controls
         controls.draw(ctx);
+
+        // Draw menu
+        menu.render(ctx);
     }
 }
 

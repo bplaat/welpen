@@ -5,6 +5,7 @@
  */
 
 import { Rect } from './math.js';
+import { DEBUG } from './game.js';
 
 const villager1Image = new Image();
 villager1Image.src = 'images/units/blue/villager1.png';
@@ -42,6 +43,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 50,
         movable: true,
         speed: 2,
@@ -53,6 +55,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 50,
         movable: true,
         speed: 2,
@@ -64,6 +67,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 100,
         movable: true,
         speed: 6,
@@ -75,6 +79,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 75,
         movable: true,
         speed: 2,
@@ -86,6 +91,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 150,
         movable: true,
         speed: 2,
@@ -99,6 +105,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.8 },
+        collision: { x: 0.35, y: 0.35, w: 0.3, h: 0.675 },
         health: 100,
         givesResource: 'Wood',
         movable: false,
@@ -109,6 +116,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.8 },
+        collision: { x: 0.3, y: 0.325, w: 0.4, h: 0.7 },
         health: 100,
         givesResource: 'Wood',
         movable: false,
@@ -119,6 +127,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.6 },
+        collision: { x: 0.35, y: 0.675, w: 0.3, h: 0.35 },
         health: 100,
         givesResource: 'Food',
         movable: false,
@@ -129,6 +138,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.2, y: 0.55, w: 0.6, h: 0.575 },
         health: 200,
         givesResource: 'Stone',
         movable: false,
@@ -139,6 +149,7 @@ export const unitTypes = {
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.2, y: 0.55, w: 0.6, h: 0.575 },
         health: 200,
         givesResource: 'Gold',
         movable: false,
@@ -151,6 +162,7 @@ export const unitTypes = {
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.93 },
+        collision: { x: 0.3, y: 0.15, w: 1.4, h: 1.85 },
         health: 1000,
         movable: false,
         lineOfSight: 8,
@@ -161,6 +173,7 @@ export const unitTypes = {
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.75 },
+        collision: { x: 0.3, y: 0.5, w: 1.4, h: 1.5 },
         health: 500,
         movable: false,
         lineOfSight: 6,
@@ -171,6 +184,7 @@ export const unitTypes = {
         width: 2,
         height: 2,
         anchor: { x: 1, y: 1.75 },
+        collision: { x: 0.2, y: 0.5, w: 1.6, h: 1.5 },
         health: 600,
         movable: false,
         lineOfSight: 6,
@@ -205,14 +219,22 @@ export default class Unit {
 
                 // Check unit collisions
                 let canMove = true;
-                const boxSize = unitType.boxScale;
                 for (const other of units) {
                     if (other !== this) {
                         const otherType = unitTypes[other.type];
-                        const otherBox = otherType.boxScale / 2;
-                        const dx = Math.abs(newX - other.x);
-                        const dy = Math.abs(newY - other.y);
-                        if (dx < (boxSize + otherBox) / 2 && dy < (boxSize + otherBox) / 2) {
+                        const collisionBox = new Rect(
+                            newX - unitType.width / 2 + unitType.collision.x,
+                            newY - unitType.height + unitType.collision.y,
+                            unitType.collision.w,
+                            unitType.collision.h
+                        );
+                        const otherCollisionBox = new Rect(
+                            other.x - otherType.width / 2 + otherType.collision.x,
+                            other.y - otherType.height + otherType.collision.y,
+                            otherType.collision.w,
+                            otherType.collision.h
+                        );
+                        if (collisionBox.intersects(otherCollisionBox)) {
                             canMove = false;
                             break;
                         }
@@ -237,68 +259,81 @@ export default class Unit {
         const unitType = unitTypes[this.type];
         ctx.drawImage(
             unitType.image,
-            window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - unitType.anchor.x * camera.tileSize,
-            window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - unitType.anchor.y * camera.tileSize,
+            window.innerWidth / 2 + (this.x - camera.x - unitType.anchor.x) * camera.tileSize,
+            window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
             unitType.width * camera.tileSize,
             unitType.height * camera.tileSize
         );
 
-        // Draw unit hot point
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.fillRect(
-            window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - camera.tileSize / 20 / 2,
-            window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - camera.tileSize / 20 / 2,
-            camera.tileSize / 20,
-            camera.tileSize / 20
+        const collisionRect = new Rect(
+            window.innerWidth / 2 + (this.x - camera.x - unitType.width / 2 + unitType.collision.x) * camera.tileSize,
+            window.innerHeight / 2 + (this.y - camera.y - unitType.height + unitType.collision.y) * camera.tileSize,
+            unitType.collision.w * camera.tileSize,
+            unitType.collision.h * camera.tileSize
         );
 
+        if (DEBUG) {
+            // Draw unit collision box
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(collisionRect.x, collisionRect.y, collisionRect.width, collisionRect.height);
+
+            // Draw unit anchor point
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.fillRect(
+                window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - camera.tileSize / 20 / 2,
+                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - camera.tileSize / 20 / 2,
+                camera.tileSize / 20,
+                camera.tileSize / 20
+            );
+        }
+
         if (isSelected) {
-            const boxSize = unitType.width * camera.tileSize;
+            const padding = collisionRect.width * 0.2;
 
-            // // Draw health bar
-            // const healthBarWidth = boxSize / 2;
-            // const healthBarHeight = boxSize * 0.05;
-            // const healthBarRect = new Rect(
-            //     window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2 + healthBarWidth / 2,
-            //     window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize / 2 - healthBarHeight - 8,
-            //     healthBarWidth,
-            //     healthBarHeight
-            // );
-            // ctx.fillStyle = '#000';
-            // ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width + 2, healthBarRect.height + 2);
-            // ctx.fillStyle = '#777';
-            // ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width, healthBarRect.height);
-
-            // ctx.fillStyle = '#f00';
-            // ctx.fillRect(healthBarRect.x, healthBarRect.y, healthBarRect.width, healthBarRect.height);
-            // ctx.fillStyle = '#0f0';
-            // ctx.fillRect(
-            //     healthBarRect.x,
-            //     healthBarRect.y,
-            //     healthBarRect.width * (this.health / unitTypes[this.type].health),
-            //     healthBarRect.height
-            // );
+            // Draw health bar
+            const healthBarWidth = collisionRect.width;
+            const healthBarHeight = collisionRect.height * 0.05;
+            const healthBarRect = new Rect(
+                collisionRect.x,
+                collisionRect.y - padding * 1.5 - healthBarHeight,
+                healthBarWidth,
+                healthBarHeight
+            );
+            ctx.fillStyle = '#000';
+            ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width + 2, healthBarRect.height + 2);
+            ctx.fillStyle = '#777';
+            ctx.fillRect(healthBarRect.x - 1, healthBarRect.y - 1, healthBarRect.width, healthBarRect.height);
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(healthBarRect.x, healthBarRect.y, healthBarRect.width, healthBarRect.height);
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(
+                healthBarRect.x,
+                healthBarRect.y,
+                healthBarRect.width * (this.health / unitTypes[this.type].health),
+                healthBarRect.height
+            );
 
             // Draw selection outline
             ctx.strokeStyle = '#777';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.roundRect(
-                window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2 + 1,
-                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize + 1,
-                boxSize,
-                boxSize,
-                boxSize / 4
+                collisionRect.x - padding + 1,
+                collisionRect.y - padding + 1,
+                collisionRect.width + padding * 2,
+                collisionRect.height + padding * 2,
+                collisionRect.width / 8
             );
             ctx.stroke();
             ctx.strokeStyle = '#fff';
             ctx.beginPath();
             ctx.roundRect(
-                window.innerWidth / 2 + (this.x - camera.x) * camera.tileSize - boxSize / 2,
-                window.innerHeight / 2 + (this.y - camera.y) * camera.tileSize - boxSize,
-                boxSize,
-                boxSize,
-                boxSize / 4
+                collisionRect.x - padding,
+                collisionRect.y - padding,
+                collisionRect.width + padding * 2,
+                collisionRect.height + padding * 2,
+                collisionRect.width / 8
             );
             ctx.stroke();
         }

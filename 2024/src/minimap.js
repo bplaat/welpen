@@ -1,4 +1,11 @@
+/*
+ * Copyright (c) 2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { Rect, Point } from './math.js';
+import { DEBUG } from './game.js';
 
 export default class Minimap {
     SIZE = 256;
@@ -10,19 +17,7 @@ export default class Minimap {
         this.camera = camera;
         this.mouseDown = false;
         this.update();
-
-        this.rect = new Rect(
-            0,
-            window.innerHeight - (this.SIZE + this.PADDING * 2),
-            this.SIZE + this.PADDING * 2,
-            this.SIZE + this.PADDING * 2
-        );
-        this.minimapRect = new Rect(
-            this.rect.x + this.PADDING,
-            this.rect.y + this.PADDING,
-            this.rect.width - this.PADDING * 2,
-            this.rect.height - this.PADDING * 2
-        );
+        this.onResize();
     }
 
     update() {
@@ -31,13 +26,13 @@ export default class Minimap {
         // Mark tiles
         for (let y = 0; y < this.map.height; y++) {
             for (let x = 0; x < this.map.width; x++) {
-                if (this.map.explored[y * this.map.width + x] === 0) {
-                    this.minimap[y * this.map.width + x] = 0x222222;
-                } else {
+                if (DEBUG || this.map.explored[y * this.map.width + x] === 1) {
                     const tile = this.map.tiles[y * this.map.width + x];
                     if (tile === 0 || tile === 1) this.minimap[y * this.map.width + x] = 0xa6e1f5;
                     if (tile === 2 || tile === 3) this.minimap[y * this.map.width + x] = 0xecdcb8;
                     if (tile === 4 || tile === 5) this.minimap[y * this.map.width + x] = 0x27ae60;
+                } else {
+                    this.minimap[y * this.map.width + x] = 0x222222;
                 }
             }
         }
@@ -45,7 +40,7 @@ export default class Minimap {
         // Mark resource units
         for (const unit of this.units) {
             const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
-            if (this.map.explored[index] === 1) {
+            if (DEBUG || this.map.explored[index] === 1) {
                 if (unit.type === 'tree1' || unit.type === 'tree2') {
                     this.minimap[index] = 0x198a49;
                 }
@@ -73,6 +68,21 @@ export default class Minimap {
                 }
             }
         }
+    }
+
+    onResize() {
+        this.rect = new Rect(
+            0,
+            window.innerHeight - (this.SIZE + this.PADDING * 2),
+            this.SIZE + this.PADDING * 2,
+            this.SIZE + this.PADDING * 2
+        );
+        this.minimapRect = new Rect(
+            this.rect.x + this.PADDING,
+            this.rect.y + this.PADDING,
+            this.rect.width - this.PADDING * 2,
+            this.rect.height - this.PADDING * 2
+        );
     }
 
     onMouseDown(event) {

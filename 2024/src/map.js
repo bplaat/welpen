@@ -8,6 +8,7 @@ import PerlinNoise from './noise.js';
 import { Random, Rect } from './math.js';
 import Unit from './unit.js';
 import { unitTypes } from './unit.js';
+import { DEBUG } from './game.js';
 
 const water1Image = new Image();
 water1Image.src = 'images/tiles/water1.png';
@@ -165,6 +166,7 @@ export default class Map {
     }
 
     update(units) {
+        // Generate sight map
         this.sight.fill(0);
         for (const unit of units) {
             if (unit.player.name === 'Player') {
@@ -186,6 +188,7 @@ export default class Map {
             }
         }
 
+        // Update explored map based on sight
         for (let i = 0; i < this.explored.length; i++) {
             if (this.sight[i] === 1) {
                 this.explored[i] = 1;
@@ -204,10 +207,7 @@ export default class Map {
                     camera.tileSize,
                     camera.tileSize
                 );
-                if (this.explored[y * this.width + x] === 0) {
-                    ctx.fillStyle = '#222';
-                    ctx.fillRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
-                } else {
+                if (DEBUG || this.explored[y * this.width + x] === 1) {
                     ctx.drawImage(
                         TILE_IMAGES[this.tiles[y * this.width + x]],
                         tileRect.x,
@@ -215,8 +215,11 @@ export default class Map {
                         tileRect.width,
                         tileRect.height
                     );
+                } else {
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
                 }
-                ctx.strokeRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
+                if (DEBUG) ctx.strokeRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);
             }
         }
     }
@@ -230,7 +233,7 @@ export default class Map {
                     camera.tileSize,
                     camera.tileSize
                 );
-                if (this.explored[y * this.width + x] === 1) {
+                if (DEBUG || this.explored[y * this.width + x] === 1) {
                     if (this.sight[y * this.width + x] === 0) {
                         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                         ctx.fillRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height);

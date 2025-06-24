@@ -7,7 +7,7 @@
 import { Point, Rect } from './math.js';
 import { unitTypes } from './unit.js';
 
-const TILE_SIZES = [32, 48, 64, 96, 128, 192, 256, 384, 512];
+const TILE_SIZES = [32, 48, 64, 96, 128];
 
 export class Camera extends Point {
     constructor(x, y, zoomLevel) {
@@ -76,13 +76,15 @@ export default class Controls {
             for (const unit of this.units) {
                 const unitType = unitTypes[unit.type];
                 if (!singleClick && (unit.player !== this.player || !unitType.movable)) continue;
-                const boxSize = this.camera.tileSize * unitType.boxScale;
-                const unitPos = new Point(
-                    window.innerWidth / 2 + (unit.x - this.camera.x) * this.camera.tileSize - boxSize / 2,
-                    window.innerHeight / 2 + (unit.y - this.camera.y) * this.camera.tileSize - boxSize / 2
+                const collisionRect = new Rect(
+                    window.innerWidth / 2 +
+                        (unit.x - this.camera.x - unitType.width / 2 + unitType.collision.x) * this.camera.tileSize,
+                    window.innerHeight / 2 +
+                        (unit.y - this.camera.y - unitType.height + unitType.collision.y) * this.camera.tileSize,
+                    unitType.collision.w * this.camera.tileSize,
+                    unitType.collision.h * this.camera.tileSize
                 );
-                const unitRect = new Rect(unitPos.x, unitPos.y, boxSize, boxSize);
-                if (selectedRect.intersects(unitRect)) {
+                if (selectedRect.intersects(collisionRect)) {
                     this.selectedUnits.push(unit);
                     if (singleClick) break;
                 }
@@ -147,8 +149,8 @@ export default class Controls {
             ctx.strokeRect(
                 Math.min(this.dragStart.x, this.dragCurrent.x),
                 Math.min(this.dragStart.y, this.dragCurrent.y),
-                Math.abs(this.dragCurrent.x - this.dragStart.x) - 1,
-                Math.abs(this.dragCurrent.y - this.dragStart.y) - 1
+                Math.abs(this.dragCurrent.x - this.dragStart.x),
+                Math.abs(this.dragCurrent.y - this.dragStart.y)
             );
         }
     }
