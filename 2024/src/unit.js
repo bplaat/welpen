@@ -257,6 +257,29 @@ export default class Unit {
         this.flipX = false;
     }
 
+    static fromJSON(json, players) {
+        const player = players.find((p) => p.id === json.player_id);
+        const unit = new Unit(json.x, json.y, json.type, player);
+        unit.variant = json.variant;
+        unit.health = json.health;
+        unit.target = json.target;
+        unit.flipX = json.flipX;
+        return unit;
+    }
+
+    toJSON() {
+        return {
+            x: this.x,
+            y: this.y,
+            type: this.type,
+            variant: this.variant,
+            player_id: this.player.id,
+            health: this.health,
+            target: this.target ? { x: this.target.x, y: this.target.y } : null,
+            flipX: this.flipX,
+        };
+    }
+
     update(delta, units, map) {
         const unitType = unitTypes[this.type];
         if (unitType.type === 'unit' && this.target) {

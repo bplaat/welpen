@@ -55,9 +55,10 @@ export default class Minimap {
 
         // Mark player units
         for (const unit of this.units) {
-            if (unit.player.type !== 'nature') {
-                const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
-                if (this.map.sight[index] === 1) {
+            const unitType = unitTypes[unit.type];
+            const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
+            if (unit.player.type !== 'nature' && (DEBUG || this.map.explored[index] === 1)) {
+                if (this.map.sight[index] === 1 || unitType.type !== 'unit') {
                     this.minimap[index] = Minimap.PLAYER_COLORS[unit.player.color];
                 }
             }

@@ -25,42 +25,43 @@ export default class Map {
         this.width = width;
         this.height = height;
         this.seed = seed;
-        this.random = new Random(seed);
     }
 
-    generate(units, gaiaPlayer) {
-        const noise = new PerlinNoise(this.seed);
+    static generate(width, height, seed, units, naturePlayer) {
+        const map = new Map(width, height, seed);
+        const random = new Random(seed);
+        const noise = new PerlinNoise(seed);
 
         // Generate terrain
-        this.terrain = new Uint8Array(this.width * this.height);
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
+        map.terrain = new Uint8Array(map.width * map.height);
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
                 const value = noise.noise(x / 20, y / 20);
                 if (value < -0.6) {
-                    this.terrain[y * this.width + x] = 0;
+                    map.terrain[y * map.width + x] = 0;
                 } else if (value < -0.5) {
-                    this.terrain[y * this.width + x] = 1;
+                    map.terrain[y * map.width + x] = 1;
                 } else if (value < -0.3) {
-                    this.terrain[y * this.width + x] = this.random.nextInt(2, 3);
+                    map.terrain[y * map.width + x] = random.nextInt(2, 3);
                 } else {
-                    this.terrain[y * this.width + x] = this.random.nextInt(4, 5);
+                    map.terrain[y * map.width + x] = random.nextInt(4, 5);
                 }
             }
         }
-        this.explored = new Uint8Array(this.width * this.height);
-        this.sight = new Uint8Array(this.width * this.height);
+        map.explored = new Uint8Array(map.width * map.height);
+        map.sight = new Uint8Array(map.width * map.height);
 
         // Generate trees and bushes with noise-based density
         const density = 4;
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                if (this.terrain[y * this.width + x] === 4 || this.terrain[y * this.width + x] === 5) {
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (map.terrain[y * map.width + x] === 4 || map.terrain[y * map.width + x] === 5) {
                     const forestValue = noise.noise((x + 4000) / 20, (y + 4000) / 20);
                     if (forestValue > 0.1) {
-                        if (this.random.next() < 0.8) {
-                            const offsetX = this.random.nextInt(0, density) / density;
-                            const offsetY = this.random.nextInt(0, density) / density;
-                            units.push(new Unit(x + offsetX, y + offsetY, 'tree', gaiaPlayer));
+                        if (random.next() < 0.8) {
+                            const offsetX = random.nextInt(0, density) / density;
+                            const offsetY = random.nextInt(0, density) / density;
+                            units.push(new Unit(x + offsetX, y + offsetY, 'tree', naturePlayer));
                         }
                     }
                 }
@@ -68,15 +69,15 @@ export default class Map {
         }
 
         // Generate bushes in clusters
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                if (this.terrain[y * this.width + x] === 4 || this.terrain[y * this.width + x] === 5) {
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (map.terrain[y * map.width + x] === 4 || map.terrain[y * map.width + x] === 5) {
                     const bushValue = noise.noise((x + 6000) / 15, (y + 6000) / 15);
                     if (bushValue > 0.4) {
-                        const offsetX = this.random.nextInt(0, density) / density;
-                        const offsetY = this.random.nextInt(0, density) / density;
-                        if (this.random.next() < 0.2) {
-                            units.push(new Unit(x + offsetX, y + offsetY, 'bushes', gaiaPlayer));
+                        const offsetX = random.nextInt(0, density) / density;
+                        const offsetY = random.nextInt(0, density) / density;
+                        if (random.next() < 0.2) {
+                            units.push(new Unit(x + offsetX, y + offsetY, 'bushes', naturePlayer));
                         }
                     }
                 }
@@ -84,15 +85,15 @@ export default class Map {
         }
 
         // Generate stones in clusters
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                if (this.terrain[y * this.width + x] > 1) {
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (map.terrain[y * map.width + x] > 1) {
                     const stoneValue = noise.noise((x + 8000) / 10, (y + 8000) / 10);
                     if (stoneValue > 0.5) {
-                        const offsetX = this.random.nextInt(0, density) / density;
-                        const offsetY = this.random.nextInt(0, density) / density;
-                        if (this.random.next() < 0.5) {
-                            units.push(new Unit(x + offsetX, y + offsetY, 'stone', gaiaPlayer));
+                        const offsetX = random.nextInt(0, density) / density;
+                        const offsetY = random.nextInt(0, density) / density;
+                        if (random.next() < 0.5) {
+                            units.push(new Unit(x + offsetX, y + offsetY, 'stone', naturePlayer));
                         }
                     }
                 }
@@ -100,23 +101,43 @@ export default class Map {
         }
 
         // Generate gold in clusters
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                if (this.terrain[y * this.width + x] > 1) {
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (map.terrain[y * map.width + x] > 1) {
                     const goldValue = noise.noise((x + 12000) / 8, (y + 12000) / 8);
                     if (goldValue > 0.4) {
-                        const offsetX = this.random.nextInt(0, density) / density;
-                        const offsetY = this.random.nextInt(0, density) / density;
-                        if (this.random.next() < 0.5) {
-                            units.push(new Unit(x + offsetX, y + offsetY, 'gold', gaiaPlayer));
+                        const offsetX = random.nextInt(0, density) / density;
+                        const offsetY = random.nextInt(0, density) / density;
+                        if (random.next() < 0.5) {
+                            units.push(new Unit(x + offsetX, y + offsetY, 'gold', naturePlayer));
                         }
                     }
                 }
             }
         }
+
+        return map;
     }
 
-    findStartPosition(units) {
+    static fromJSON(json) {
+        const map = new Map(json.width, json.height, json.seed);
+        map.terrain = new Uint8Array(json.terrain);
+        map.explored = new Uint8Array(json.explored);
+        map.sight = new Uint8Array(map.width * map.height);
+        return map;
+    }
+
+    toJSON() {
+        return {
+            width: this.width,
+            height: this.height,
+            seed: this.seed,
+            terrain: Array.from(this.terrain),
+            explored: Array.from(this.explored),
+        };
+    }
+
+    findStartPosition(units, stopFirst) {
         let startX = 1;
         let startY = 1;
         let bestOpenArea = 0;
@@ -146,6 +167,9 @@ export default class Map {
                     bestOpenArea = openArea;
                     startX = x;
                     startY = y;
+                    if (stopFirst) {
+                        return { x: startX + 2, y: startY + 2 };
+                    }
                 }
             }
         }

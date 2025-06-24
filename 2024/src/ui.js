@@ -5,7 +5,7 @@
  */
 
 import { Point, Rect } from './math.js';
-import { DEBUG, setDebug } from './game.js';
+import { DEBUG, setDebug, resetState, saveState } from './game.js';
 
 export class Label {
     constructor(text, x = 0, y = 0, width = 0, height = 0, font = '16px Arial', textColor = '#fff') {
@@ -79,11 +79,15 @@ export class Menu {
         this.elements = [
             new Label('Welpen Game 2024: Ridders', 0, 0, 0, 0, '32px Arial'),
             new Button('Play Ridders', () => this.hide()),
+            new Button('Save map', () => saveState()),
             new Button(DEBUG ? 'Disable debug' : 'Enable debug', function () {
                 setDebug(!DEBUG);
                 this.text = DEBUG ? 'Disable debug' : 'Enable debug';
             }),
-            new Button('Reset map', () => window.location.reload()),
+            new Button('Reset map', () => {
+                resetState();
+                this.hide();
+            }),
             new Label('Made by Bagheera', 0, 0, 0, 0, 'italic 16px Arial'),
         ];
         this.onResize();

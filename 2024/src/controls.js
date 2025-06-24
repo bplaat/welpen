@@ -12,8 +12,24 @@ const TILE_SIZES = [32, 48, 64, 96, 128];
 export class Camera extends Point {
     constructor(x, y, zoomLevel) {
         super(x, y);
-        this.zoomLevel = zoomLevel;
+        this.setZoomLevel(zoomLevel);
+    }
+
+    setZoomLevel(zoomLevel) {
+        this.zoomLevel = Math.max(0, Math.min(TILE_SIZES.length - 1, zoomLevel));
         this.tileSize = TILE_SIZES[this.zoomLevel];
+    }
+
+    static fromJSON(json) {
+        return new Camera(json.x, json.y, json.zoomLevel);
+    }
+
+    toJSON() {
+        return {
+            x: this.x,
+            y: this.y,
+            zoomLevel: this.zoomLevel,
+        };
     }
 }
 
@@ -135,8 +151,7 @@ export default class Controls {
         const cursorWorldX = (event.clientX - window.innerWidth / 2) / this.camera.tileSize + this.camera.x;
         const cursorWorldY = (event.clientY - window.innerHeight / 2) / this.camera.tileSize + this.camera.y;
 
-        this.camera.zoomLevel = Math.max(0, Math.min(TILE_SIZES.length - 1, this.camera.zoomLevel + delta));
-        this.camera.tileSize = TILE_SIZES[this.camera.zoomLevel];
+        this.camera.setZoomLevel(Math.max(0, Math.min(TILE_SIZES.length - 1, this.camera.zoomLevel + delta)));
 
         this.camera.x = cursorWorldX - (event.clientX - window.innerWidth / 2) / this.camera.tileSize;
         this.camera.y = cursorWorldY - (event.clientY - window.innerHeight / 2) / this.camera.tileSize;
