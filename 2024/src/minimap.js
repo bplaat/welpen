@@ -9,12 +9,12 @@ import { DEBUG } from './game.js';
 import { unitTypes } from './unit.js';
 
 export default class Minimap {
-    SIZE = 256;
-    PADDING = 8;
+    static SIZE = 256;
+    static PADDING = 8;
     static PLAYER_COLORS = {
         nature: 0xaaaaaa,
-        blue: 0x157da8,
-        red: 0xa6583c,
+        blue: 0x157df8,
+        red: 0xf6583c,
     };
 
     constructor(map, units, camera, controls) {
@@ -34,7 +34,7 @@ export default class Minimap {
         for (let y = 0; y < this.map.height; y++) {
             for (let x = 0; x < this.map.width; x++) {
                 if (DEBUG || this.map.explored[y * this.map.width + x] === 1) {
-                    const tile = this.map.tiles[y * this.map.width + x];
+                    const tile = this.map.terrain[y * this.map.width + x];
                     if (tile === 0 || tile === 1) this.minimap[y * this.map.width + x] = 0xa6e1f5;
                     if (tile === 2 || tile === 3) this.minimap[y * this.map.width + x] = 0xecdcb8;
                     if (tile === 4 || tile === 5) this.minimap[y * this.map.width + x] = 0x27ae60;
@@ -49,7 +49,7 @@ export default class Minimap {
             const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
             if (DEBUG || this.map.explored[index] === 1) {
                 if (unit.type === 'tree') this.minimap[index] = 0x198a49;
-                if (unit.type === 'bushes') this.minimap[index] = 0xd2704c;
+                if (unit.type === 'bushes') this.minimap[index] = 0xa2704c;
                 if (unit.type === 'stone') this.minimap[index] = 0x9ba6a6;
                 if (unit.type === 'gold') this.minimap[index] = 0xffdf99;
             }
@@ -69,15 +69,15 @@ export default class Minimap {
     onResize() {
         this.rect = new Rect(
             0,
-            window.innerHeight - (this.SIZE + this.PADDING * 2),
-            this.SIZE + this.PADDING * 2,
-            this.SIZE + this.PADDING * 2
+            window.innerHeight - (Minimap.SIZE + Minimap.PADDING * 2),
+            Minimap.SIZE + Minimap.PADDING * 2,
+            Minimap.SIZE + Minimap.PADDING * 2
         );
         this.minimapRect = new Rect(
-            this.rect.x + this.PADDING,
-            this.rect.y + this.PADDING,
-            this.rect.width - this.PADDING * 2,
-            this.rect.height - this.PADDING * 2
+            this.rect.x + Minimap.PADDING,
+            this.rect.y + Minimap.PADDING,
+            this.rect.width - Minimap.PADDING * 2,
+            this.rect.height - Minimap.PADDING * 2
         );
     }
 
@@ -137,18 +137,18 @@ export default class Minimap {
             for (let x = 0; x < this.map.width; x++) {
                 ctx.fillStyle = `#${this.minimap[y * this.map.width + x].toString(16).padStart(6, '0')}`;
                 ctx.fillRect(
-                    this.minimapRect.x + x * (this.SIZE / this.map.width),
-                    this.minimapRect.y + y * (this.SIZE / this.map.height),
-                    this.SIZE / this.map.width,
-                    this.SIZE / this.map.height
+                    this.minimapRect.x + x * (Minimap.SIZE / this.map.width),
+                    this.minimapRect.y + y * (Minimap.SIZE / this.map.height),
+                    Minimap.SIZE / this.map.width,
+                    Minimap.SIZE / this.map.height
                 );
                 if (this.map.sight[y * this.map.width + x] === 0) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
                     ctx.fillRect(
-                        this.minimapRect.x + x * (this.SIZE / this.map.width),
-                        this.minimapRect.y + y * (this.SIZE / this.map.height),
-                        this.SIZE / this.map.width,
-                        this.SIZE / this.map.height
+                        this.minimapRect.x + x * (Minimap.SIZE / this.map.width),
+                        this.minimapRect.y + y * (Minimap.SIZE / this.map.height),
+                        Minimap.SIZE / this.map.width,
+                        Minimap.SIZE / this.map.height
                     );
                 }
             }
@@ -157,11 +157,11 @@ export default class Minimap {
         // Render viewport
         const viewport = new Rect(
             this.minimapRect.x +
-                ((this.camera.x - window.innerWidth / (2 * this.camera.tileSize)) / this.map.width) * this.SIZE,
+                ((this.camera.x - window.innerWidth / (2 * this.camera.tileSize)) / this.map.width) * Minimap.SIZE,
             this.minimapRect.y +
-                ((this.camera.y - window.innerHeight / (2 * this.camera.tileSize)) / this.map.height) * this.SIZE,
-            (window.innerWidth / (this.camera.tileSize * this.map.width)) * this.SIZE,
-            (window.innerHeight / (this.camera.tileSize * this.map.height)) * this.SIZE
+                ((this.camera.y - window.innerHeight / (2 * this.camera.tileSize)) / this.map.height) * Minimap.SIZE,
+            (window.innerWidth / (this.camera.tileSize * this.map.width)) * Minimap.SIZE,
+            (window.innerHeight / (this.camera.tileSize * this.map.height)) * Minimap.SIZE
         );
         ctx.lineWidth = 1;
         ctx.save();

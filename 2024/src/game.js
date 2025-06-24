@@ -7,13 +7,11 @@
 /*
 
 TODO:
-- Add unit path finding
-- Add population limit
- - House increase population limit
 - Add unit actions
     - Villager build
     - Town center train villager
     - Barracks train soldier, knight
+- Add unit path finding
 - Add enemies spawn with wave system
 - Add unit target other unit
 - Add villager gather
@@ -27,32 +25,36 @@ import Unit, { unitTypes } from './unit.js';
 import Controls, { Camera } from './controls.js';
 import { Button, Menu } from './ui.js';
 
+// MARK: Debug flag
 export let DEBUG = window.location.origin !== 'https://bplaat.github.io';
 export function setDebug(value) {
     DEBUG = value;
 }
 
 // MARK: Canvas
-const canvas = document.createElement('canvas');
-document.body.appendChild(canvas);
-const ctx = canvas.getContext('2d');
+class Canvas {
+    constructor() {
+        this.element = document.createElement('canvas');
+        this.ctx = this.element.getContext('2d');
+        document.body.appendChild(this.element);
+        this.onResize();
+        window.addEventListener('resize', this.onResize.bind(this));
+    }
 
-window.addEventListener('contextmenu', (event) => event.preventDefault());
-
-function resize() {
-    canvas.width = window.innerWidth * window.devicePixelRatio;
-    canvas.height = window.innerHeight * window.devicePixelRatio;
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    onResize() {
+        this.element.width = window.innerWidth * window.devicePixelRatio;
+        this.element.height = window.innerHeight * window.devicePixelRatio;
+        this.element.style.width = `${window.innerWidth}px`;
+        this.element.style.height = `${window.innerHeight}px`;
+        this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
 }
-resize();
-window.addEventListener('resize', resize);
+const canvas = new Canvas();
 
 // MARK: Player
 class Player {
     constructor(type, name, color) {
-        this.type = type; // 'nature', 'player', 'cpu'
+        this.type = type;
         this.name = name;
         this.color = color;
         this.food = 250;
@@ -60,6 +62,28 @@ class Player {
         this.gold = 0;
         this.stone = 0;
         this.score = 0;
+
+        this.population = 0;
+        this.populationLimit = 0;
+    }
+
+    update(units) {
+        // Calculate population based on units
+        this.population = 0;
+        for (const unit of units) {
+            const unitType = unitTypes[unit.type];
+            if (unitType.population !== undefined && unit.player === this) {
+                this.population += unitType.population;
+            }
+        }
+
+        // Calculate population limit based on houses
+        this.populationLimit = 0;
+        for (const unit of units) {
+            if (unit.player === this && unit.type === 'house') {
+                this.populationLimit += 5;
+            }
+        }
     }
 }
 
@@ -73,6 +97,7 @@ const units = [];
 const map = new Map(64, 64, Date.now());
 map.generate(units, naturePlayer);
 
+// FIXME: Random start base
 const playerStartSpot = map.findStartPosition(units);
 units.push(new Unit(playerStartSpot.x, playerStartSpot.y - 1, 'villager', player));
 units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y - 1, 'villager', player));
@@ -102,6 +127,7 @@ const menuButton = new Button('Menu', () => menu.show(), window.innerWidth - 150
 const minimap = new Minimap(map, units, camera, controls);
 
 // MARK: Event listeners
+window.addEventListener('contextmenu', (event) => event.preventDefault());
 window.addEventListener('resize', (event) => {
     menuButton.rect.x = window.innerWidth - 150;
     menu.onResize();
@@ -140,19 +166,18 @@ window.addEventListener('wheel', (event) => {
 
 // MARK: Game loop
 function update(delta) {
+    for (const player of players) {
+        player.update(units);
+    }
     for (const unit of units) {
         unit.update(delta, units, map);
     }
-    for (const player of players) {
-        player.score += 1 * delta;
-    }
-
     map.update(units);
     minimap.update();
     controls.update(delta);
 }
 
-function render() {
+function render(ctx) {
     ctx.fillStyle = '#333';
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
@@ -186,7 +211,7 @@ function render() {
         ctx.textAlign = 'left';
 
         // Draw resources
-        const width = 400;
+        const width = 600;
         const x = window.innerWidth / 2 - width / 2;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(x, 0, width, 32);
@@ -195,6 +220,7 @@ function render() {
         ctx.fillText(`Wood: ${player.wood}`, x + 100, 8);
         ctx.fillText(`Gold: ${player.gold}`, x + 200, 8);
         ctx.fillText(`Stone: ${player.stone}`, x + 300, 8);
+        ctx.fillText(`Population: ${player.population} / ${player.populationLimit}`, x + 400, 8);
 
         menuButton.render(ctx);
         minimap.render(ctx);
@@ -273,6 +299,6 @@ function loop() {
     const time = performance.now();
     update((time - lastTime) / 1000);
     lastTime = time;
-    render();
+    render(canvas.ctx);
 }
 loop();

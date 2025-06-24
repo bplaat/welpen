@@ -12,8 +12,8 @@ import { DEBUG } from './game.js';
 import { img } from './utils.js';
 
 const TILE_IMAGES = [
-    img('images/tiles/water1.png'),
-    img('images/tiles/water2.png'),
+    img('images/tiles/deep_water.png'),
+    img('images/tiles/water.png'),
     img('images/tiles/sand1.png'),
     img('images/tiles/sand2.png'),
     img('images/tiles/grass1.png'),
@@ -31,17 +31,19 @@ export default class Map {
     generate(units, gaiaPlayer) {
         const noise = new PerlinNoise(this.seed);
 
-        // Generate tiles
-        this.tiles = new Uint8Array(this.width * this.height);
+        // Generate terrain
+        this.terrain = new Uint8Array(this.width * this.height);
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 const value = noise.noise(x / 20, y / 20);
-                if (value < -0.5) {
-                    this.tiles[y * this.width + x] = this.random.nextInt(0, 1);
+                if (value < -0.6) {
+                    this.terrain[y * this.width + x] = 0;
+                } else if (value < -0.5) {
+                    this.terrain[y * this.width + x] = 1;
                 } else if (value < -0.3) {
-                    this.tiles[y * this.width + x] = this.random.nextInt(2, 3);
+                    this.terrain[y * this.width + x] = this.random.nextInt(2, 3);
                 } else {
-                    this.tiles[y * this.width + x] = this.random.nextInt(4, 5);
+                    this.terrain[y * this.width + x] = this.random.nextInt(4, 5);
                 }
             }
         }
@@ -52,8 +54,7 @@ export default class Map {
         const density = 4;
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                // Only place trees and bushes on grass tiles (4, 5)
-                if (this.tiles[y * this.width + x] === 4 || this.tiles[y * this.width + x] === 5) {
+                if (this.terrain[y * this.width + x] === 4 || this.terrain[y * this.width + x] === 5) {
                     const forestValue = noise.noise((x + 4000) / 20, (y + 4000) / 20);
                     if (forestValue > 0.1) {
                         if (this.random.next() < 0.8) {
@@ -69,8 +70,7 @@ export default class Map {
         // Generate bushes in clusters
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                // Only place on grass tiles (4, 5)
-                if (this.tiles[y * this.width + x] === 4 || this.tiles[y * this.width + x] === 5) {
+                if (this.terrain[y * this.width + x] === 4 || this.terrain[y * this.width + x] === 5) {
                     const bushValue = noise.noise((x + 6000) / 15, (y + 6000) / 15);
                     if (bushValue > 0.4) {
                         const offsetX = this.random.nextInt(0, density) / density;
@@ -86,8 +86,7 @@ export default class Map {
         // Generate stones in clusters
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                // Only place on non-water tiles (index > 1)
-                if (this.tiles[y * this.width + x] > 1) {
+                if (this.terrain[y * this.width + x] > 1) {
                     const stoneValue = noise.noise((x + 8000) / 10, (y + 8000) / 10);
                     if (stoneValue > 0.5) {
                         const offsetX = this.random.nextInt(0, density) / density;
@@ -103,8 +102,7 @@ export default class Map {
         // Generate gold in clusters
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
-                // Only place on non-water tiles (index > 1)
-                if (this.tiles[y * this.width + x] > 1) {
+                if (this.terrain[y * this.width + x] > 1) {
                     const goldValue = noise.noise((x + 12000) / 8, (y + 12000) / 8);
                     if (goldValue > 0.4) {
                         const offsetX = this.random.nextInt(0, density) / density;
@@ -130,7 +128,7 @@ export default class Map {
                 // Check 5x5 area
                 for (let dy = 0; dy < searchArea; dy++) {
                     for (let dx = 0; dx < searchArea; dx++) {
-                        const tile = this.tiles[(y + dy) * this.width + (x + dx)];
+                        const tile = this.terrain[(y + dy) * this.width + (x + dx)];
                         if (tile === 4 || tile === 5) {
                             openArea++;
                         }
@@ -191,14 +189,14 @@ export default class Map {
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 const tileRect = new Rect(
-                    window.innerWidth / 2 + (x - camera.x) * camera.tileSize,
-                    window.innerHeight / 2 + (y - camera.y) * camera.tileSize,
-                    camera.tileSize,
-                    camera.tileSize
+                    Math.floor(window.innerWidth / 2 + (x - camera.x) * camera.tileSize),
+                    Math.floor(window.innerHeight / 2 + (y - camera.y) * camera.tileSize),
+                    Math.ceil(camera.tileSize),
+                    Math.ceil(camera.tileSize)
                 );
                 if (DEBUG || this.explored[y * this.width + x] === 1) {
                     ctx.drawImage(
-                        TILE_IMAGES[this.tiles[y * this.width + x]],
+                        TILE_IMAGES[this.terrain[y * this.width + x]],
                         tileRect.x,
                         tileRect.y,
                         tileRect.width,
@@ -217,10 +215,10 @@ export default class Map {
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 const tileRect = new Rect(
-                    window.innerWidth / 2 + (x - camera.x) * camera.tileSize,
-                    window.innerHeight / 2 + (y - camera.y) * camera.tileSize,
-                    camera.tileSize,
-                    camera.tileSize
+                    Math.floor(window.innerWidth / 2 + (x - camera.x) * camera.tileSize),
+                    Math.floor(window.innerHeight / 2 + (y - camera.y) * camera.tileSize),
+                    Math.ceil(camera.tileSize),
+                    Math.ceil(camera.tileSize)
                 );
                 if (DEBUG || this.explored[y * this.width + x] === 1) {
                     if (this.sight[y * this.width + x] === 0) {

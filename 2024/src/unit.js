@@ -60,6 +60,7 @@ export const unitTypes = {
         movable: true,
         speed: 2,
         lineOfSight: 3,
+        population: 1,
     },
     king: {
         name: 'King',
@@ -71,6 +72,7 @@ export const unitTypes = {
         movable: true,
         speed: 4,
         lineOfSight: 5,
+        population: 0,
     },
     spearman: {
         name: 'Spearman',
@@ -82,6 +84,7 @@ export const unitTypes = {
         movable: true,
         speed: 2,
         lineOfSight: 4,
+        population: 1,
     },
     knight: {
         name: 'Knight',
@@ -93,6 +96,7 @@ export const unitTypes = {
         movable: true,
         speed: 2,
         lineOfSight: 4,
+        population: 2,
     },
     scout: {
         name: 'Scout',
@@ -104,6 +108,7 @@ export const unitTypes = {
         movable: true,
         speed: 6,
         lineOfSight: 10,
+        population: 1,
     },
     monk: {
         name: 'Monk',
@@ -115,6 +120,7 @@ export const unitTypes = {
         movable: true,
         speed: 2,
         lineOfSight: 5,
+        population: 1,
     },
 
     // Resources
@@ -252,6 +258,14 @@ export default class Unit {
                 if (newY < 0) newY = 0;
                 if (newX >= map.width) newX = map.width;
                 if (newY >= map.height) newY = map.height;
+
+                // Check terrain collisions
+                const tileX = Math.floor(newX);
+                const tileY = Math.floor(newY);
+                if (map.terrain[tileY * map.width + tileX] <= 1) {
+                    newX = this.x;
+                    newY = this.y;
+                }
 
                 // Check unit collisions
                 let canMove = true;
