@@ -11,6 +11,11 @@ import { unitTypes } from './unit.js';
 export default class Minimap {
     SIZE = 256;
     PADDING = 8;
+    static PLAYER_COLORS = {
+        nature: 0xaaaaaa,
+        blue: 0x157da8,
+        red: 0xa6583c,
+    };
 
     constructor(map, units, camera, controls) {
         this.map = map;
@@ -43,18 +48,10 @@ export default class Minimap {
         for (const unit of this.units) {
             const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
             if (DEBUG || this.map.explored[index] === 1) {
-                if (unit.type === 'tree1' || unit.type === 'tree2') {
-                    this.minimap[index] = 0x198a49;
-                }
-                if (unit.type === 'bushes') {
-                    this.minimap[index] = 0xd2704c;
-                }
-                if (unit.type === 'stone') {
-                    this.minimap[index] = 0x9ba6a6;
-                }
-                if (unit.type === 'gold') {
-                    this.minimap[index] = 0xffdf99;
-                }
+                if (unit.type === 'tree') this.minimap[index] = 0x198a49;
+                if (unit.type === 'bushes') this.minimap[index] = 0xd2704c;
+                if (unit.type === 'stone') this.minimap[index] = 0x9ba6a6;
+                if (unit.type === 'gold') this.minimap[index] = 0xffdf99;
             }
         }
 
@@ -62,11 +59,8 @@ export default class Minimap {
         for (const unit of this.units) {
             const index = Math.floor(unit.y) * this.map.width + Math.floor(unit.x);
             if (this.map.sight[index] === 1) {
-                if (unit.player.name === 'Player') {
-                    this.minimap[index] = 0x157da8;
-                }
-                if (unit.player.name === 'Enemy') {
-                    this.minimap[index] = 0xa6583c;
+                if (unit.player.type !== 'nature') {
+                    this.minimap[index] = Minimap.PLAYER_COLORS[unit.player.color];
                 }
             }
         }

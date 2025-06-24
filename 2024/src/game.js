@@ -27,7 +27,7 @@ import Unit, { unitTypes } from './unit.js';
 import Controls, { Camera } from './controls.js';
 import { Button, Menu } from './ui.js';
 
-export let DEBUG = window.location !== 'https://bplaat.github.io/welpen/';
+export let DEBUG = window.location.origin !== 'https://bplaat.github.io';
 export function setDebug(value) {
     DEBUG = value;
 }
@@ -51,7 +51,8 @@ window.addEventListener('resize', resize);
 
 // MARK: Player
 class Player {
-    constructor(name, color) {
+    constructor(type, name, color) {
+        this.type = type; // 'nature', 'player', 'cpu'
         this.name = name;
         this.color = color;
         this.food = 250;
@@ -63,9 +64,9 @@ class Player {
 }
 
 // MARK: Game state
-const naturePlayer = new Player('Nature', '#aaa');
-const player = new Player('Player', '#1ea7e1');
-const enemy = new Player('King Evil', '#a6583c');
+const naturePlayer = new Player('nature', 'Nature', 'nature');
+const player = new Player('player', 'Player', 'blue');
+const enemy = new Player('cpu', 'King Evil', 'red');
 const players = [naturePlayer, player, enemy];
 
 const units = [];
@@ -73,19 +74,23 @@ const map = new Map(64, 64, Date.now());
 map.generate(units, naturePlayer);
 
 const playerStartSpot = map.findStartPosition(units);
-units.push(new Unit(playerStartSpot.x, playerStartSpot.y, 'villager', player));
-units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y, 'villager', player));
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y - 1, 'villager', player));
+units.push(new Unit(playerStartSpot.x + 1, playerStartSpot.y - 1, 'villager', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y - 1, 'king', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y - 1 + 0.5, 'king', player));
+units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y - 1, 'spearman', player));
+units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y - 1 + 0.5, 'spearman', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y - 1, 'knight', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y - 1 + 0.5, 'knight', player));
+units.push(new Unit(playerStartSpot.x + 5, playerStartSpot.y - 1, 'scout', player));
+units.push(new Unit(playerStartSpot.x + 5, playerStartSpot.y - 1 + 0.5, 'monk', player));
 
-units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y, 'king', player));
-units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 0.5, 'king', player));
-units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y, 'soldier', player));
-units.push(new Unit(playerStartSpot.x + 3, playerStartSpot.y + 0.5, 'soldier', player));
-units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y, 'knight', player));
-units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 0.5, 'knight', player));
-
-units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 3, 'house', player));
-units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 3, 'townCenter', player));
-units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 3, 'barracks', player));
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 2, 'house', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 2, 'townCenter', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 2, 'barracks', player));
+units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 5, 'storeHouse', player));
+units.push(new Unit(playerStartSpot.x + 2, playerStartSpot.y + 5, 'church', player));
+units.push(new Unit(playerStartSpot.x + 4, playerStartSpot.y + 5, 'tower', player));
 
 const camera = new Camera(playerStartSpot.x + 2, playerStartSpot.y + 2, 4);
 const controls = new Controls(camera, map, player, units);
@@ -249,7 +254,8 @@ function render() {
             const y = window.innerHeight - (i + 1) * 32;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
             ctx.fillRect(x, y, 160, 32);
-            ctx.fillStyle = sortedPlayers[i].color;
+
+            ctx.fillStyle = `#${Minimap.PLAYER_COLORS[sortedPlayers[i].color].toString(16).padStart(6, '0')}`;
             ctx.fillText(`${sortedPlayers[i].name}: ${Math.floor(sortedPlayers[i].score)}`, x + 150 - 8, y + 8);
         }
 

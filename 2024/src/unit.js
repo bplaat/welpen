@@ -6,39 +6,51 @@
 
 import { Rect, Random } from './math.js';
 import { DEBUG } from './game.js';
+import { img } from './utils.js';
 
-const villager1Image = new Image();
-villager1Image.src = 'images/units/blue/villager1.png';
-const villager2Image = new Image();
-villager2Image.src = 'images/units/blue/villager2.png';
-const kingImage = new Image();
-kingImage.src = 'images/units/blue/king.png';
-const soldierImage = new Image();
-soldierImage.src = 'images/units/blue/soldier.png';
-const knightImage = new Image();
-knightImage.src = 'images/units/blue/knight.png';
-const townCenterImage = new Image();
-townCenterImage.src = 'images/units/blue/town_center.png';
-const houseImage = new Image();
-houseImage.src = 'images/units/blue/house.png';
-const barracksImage = new Image();
-barracksImage.src = 'images/units/blue/barracks.png';
-
-const tree1Image = new Image();
-tree1Image.src = 'images/units/nature/tree1.png';
-const tree2Image = new Image();
-tree2Image.src = 'images/units/nature/tree2.png';
-const bushesImage = new Image();
-bushesImage.src = 'images/units/nature/bushes.png';
-const stoneImage = new Image();
-stoneImage.src = 'images/units/nature/stone.png';
-const goldImage = new Image();
-goldImage.src = 'images/units/nature/gold.png';
+const unitImages = {
+    nature: {
+        bushes: img('images/units/nature/bushes.png'),
+        tree1: img('images/units/nature/tree1.png'),
+        tree2: img('images/units/nature/tree2.png'),
+        stone: img('images/units/nature/stone.png'),
+        gold: img('images/units/nature/gold.png'),
+    },
+    blue: {
+        villager1: img('images/units/blue/villager1.png'),
+        villager2: img('images/units/blue/villager2.png'),
+        king: img('images/units/blue/king.png'),
+        spearman: img('images/units/blue/spearman.png'),
+        knight: img('images/units/blue/knight.png'),
+        monk: img('images/units/blue/monk.png'),
+        scout: img('images/units/blue/scout.png'),
+        townCenter: img('images/units/blue/town_center.png'),
+        house: img('images/units/blue/house.png'),
+        barracks: img('images/units/blue/barracks.png'),
+        storeHouse: img('images/units/blue/store_house.png'),
+        church: img('images/units/blue/church.png'),
+        tower: img('images/units/blue/tower.png'),
+    },
+    red: {
+        villager1: img('images/units/red/villager1.png'),
+        villager2: img('images/units/red/villager2.png'),
+        king: img('images/units/red/king.png'),
+        spearman: img('images/units/red/spearman.png'),
+        knight: img('images/units/red/knight.png'),
+        monk: img('images/units/red/monk.png'),
+        scout: img('images/units/red/scout.png'),
+        townCenter: img('images/units/red/town_center.png'),
+        house: img('images/units/red/house.png'),
+        barracks: img('images/units/red/barracks.png'),
+        storeHouse: img('images/units/red/store_house.png'),
+        church: img('images/units/red/church.png'),
+        tower: img('images/units/red/tower.png'),
+    },
+};
 
 export const unitTypes = {
     // Units
     villager: {
-        images: [villager1Image, villager2Image],
         name: 'Villager',
         width: 1,
         height: 1,
@@ -50,7 +62,6 @@ export const unitTypes = {
         lineOfSight: 3,
     },
     king: {
-        image: kingImage,
         name: 'King',
         width: 1,
         height: 1,
@@ -58,12 +69,11 @@ export const unitTypes = {
         collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
         health: 100,
         movable: true,
-        speed: 6,
+        speed: 4,
         lineOfSight: 5,
     },
-    soldier: {
-        image: soldierImage,
-        name: 'Soldier',
+    spearman: {
+        name: 'Spearman',
         width: 1,
         height: 1,
         anchor: { x: 0.5, y: 0.675 },
@@ -74,7 +84,6 @@ export const unitTypes = {
         lineOfSight: 4,
     },
     knight: {
-        image: knightImage,
         name: 'Knight',
         width: 1,
         height: 1,
@@ -85,10 +94,31 @@ export const unitTypes = {
         speed: 2,
         lineOfSight: 4,
     },
+    scout: {
+        name: 'Scout',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
+        health: 150,
+        movable: true,
+        speed: 6,
+        lineOfSight: 10,
+    },
+    monk: {
+        name: 'Monk',
+        width: 1,
+        height: 1,
+        anchor: { x: 0.5, y: 0.675 },
+        collision: { x: 0.35, y: 0.625, w: 0.3, h: 0.4 },
+        health: 150,
+        movable: true,
+        speed: 2,
+        lineOfSight: 5,
+    },
 
     // Resources
-    tree1: {
-        image: tree1Image,
+    tree: {
         name: 'Tree',
         width: 1,
         height: 1,
@@ -98,19 +128,7 @@ export const unitTypes = {
         givesResource: 'Wood',
         movable: false,
     },
-    tree2: {
-        image: tree2Image,
-        name: 'Tree',
-        width: 1,
-        height: 1,
-        anchor: { x: 0.5, y: 0.8 },
-        collision: { x: 0.3, y: 0.325, w: 0.4, h: 0.7 },
-        health: 100,
-        givesResource: 'Wood',
-        movable: false,
-    },
     bushes: {
-        image: bushesImage,
         name: 'Bushes',
         width: 1,
         height: 1,
@@ -121,7 +139,6 @@ export const unitTypes = {
         movable: false,
     },
     stone: {
-        image: stoneImage,
         name: 'Stone',
         width: 1,
         height: 1,
@@ -132,7 +149,6 @@ export const unitTypes = {
         movable: false,
     },
     gold: {
-        image: goldImage,
         name: 'Gold',
         width: 1,
         height: 1,
@@ -145,7 +161,6 @@ export const unitTypes = {
 
     // Buildings
     townCenter: {
-        image: townCenterImage,
         name: 'Town Center',
         width: 2,
         height: 2,
@@ -156,7 +171,6 @@ export const unitTypes = {
         lineOfSight: 8,
     },
     house: {
-        image: houseImage,
         name: 'House',
         width: 2,
         height: 2,
@@ -167,7 +181,6 @@ export const unitTypes = {
         lineOfSight: 6,
     },
     barracks: {
-        image: barracksImage,
         name: 'Barracks',
         width: 2,
         height: 2,
@@ -176,6 +189,36 @@ export const unitTypes = {
         health: 600,
         movable: false,
         lineOfSight: 6,
+    },
+    storeHouse: {
+        name: 'Store House',
+        width: 2,
+        height: 2,
+        anchor: { x: 1, y: 1.95 },
+        collision: { x: 0.1, y: 0.1, w: 1.8, h: 1.9 },
+        health: 500,
+        movable: false,
+        lineOfSight: 6,
+    },
+    church: {
+        name: 'Church',
+        width: 2,
+        height: 4,
+        anchor: { x: 1, y: 3.1 },
+        collision: { x: 0.3, y: 1.75, w: 1.4, h: 2.3 },
+        health: 600,
+        movable: false,
+        lineOfSight: 6,
+    },
+    tower: {
+        name: 'Tower',
+        width: 2,
+        height: 4,
+        anchor: { x: 1, y: 3.3 },
+        collision: { x: 0.3, y: 1.4, w: 1.4, h: 2.6 },
+        health: 800,
+        movable: false,
+        lineOfSight: 12,
     },
 };
 
@@ -186,8 +229,8 @@ export default class Unit {
         this.x = x;
         this.y = y;
         this.type = type;
-        if (this.type == 'villager') {
-            this.variant = random.nextInt(0, 1);
+        if (this.type == 'villager' || this.type == 'tree') {
+            this.variant = random.nextInt(1, 2);
         }
         this.player = player;
         this.health = unitTypes[type].health;
@@ -248,11 +291,10 @@ export default class Unit {
     }
 
     image() {
-        const unitType = unitTypes[this.type];
-        if (this.type === 'villager') {
-            return unitType.images[this.variant];
+        if (this.type === 'villager' || this.type === 'tree') {
+            return unitImages[this.player.color][`${this.type}${this.variant}`];
         }
-        return unitType.image;
+        return unitImages[this.player.color][this.type];
     }
 
     draw(ctx, camera, isSelected) {

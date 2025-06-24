@@ -65,7 +65,7 @@ export default class Controls {
     onMouseUp(event) {
         if (this.isDragging) {
             this.isDragging = false;
-            const singleClick = this.dragStart.equals(this.dragCurrent);
+            const singleClick = this.dragStart.distanceTo(this.dragCurrent) < 2;
 
             // Select all units in drag rect
             const selectedRect = new Rect(

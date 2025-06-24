@@ -9,20 +9,16 @@ import { Random, Rect } from './math.js';
 import Unit from './unit.js';
 import { unitTypes } from './unit.js';
 import { DEBUG } from './game.js';
+import { img } from './utils.js';
 
-const water1Image = new Image();
-water1Image.src = 'images/tiles/water1.png';
-const water2Image = new Image();
-water2Image.src = 'images/tiles/water2.png';
-const sand1Image = new Image();
-sand1Image.src = 'images/tiles/sand1.png';
-const sand2Image = new Image();
-sand2Image.src = 'images/tiles/sand2.png';
-const grass1Image = new Image();
-grass1Image.src = 'images/tiles/grass1.png';
-const grass2Image = new Image();
-grass2Image.src = 'images/tiles/grass2.png';
-const TILE_IMAGES = [water1Image, water2Image, sand1Image, sand2Image, grass1Image, grass2Image];
+const TILE_IMAGES = [
+    img('images/tiles/water1.png'),
+    img('images/tiles/water2.png'),
+    img('images/tiles/sand1.png'),
+    img('images/tiles/sand2.png'),
+    img('images/tiles/grass1.png'),
+    img('images/tiles/grass2.png'),
+];
 
 export default class Map {
     constructor(width, height, seed) {
@@ -63,14 +59,7 @@ export default class Map {
                         if (this.random.next() < 0.8) {
                             const offsetX = this.random.nextInt(0, density) / density;
                             const offsetY = this.random.nextInt(0, density) / density;
-                            units.push(
-                                new Unit(
-                                    x + offsetX,
-                                    y + offsetY,
-                                    this.random.nextInt(0, 1) === 0 ? 'tree1' : 'tree2',
-                                    gaiaPlayer
-                                )
-                            );
+                            units.push(new Unit(x + offsetX, y + offsetY, 'tree', gaiaPlayer));
                         }
                     }
                 }
@@ -169,7 +158,7 @@ export default class Map {
         // Generate sight map
         this.sight.fill(0);
         for (const unit of units) {
-            if (unit.player.name === 'Player') {
+            if (unit.player.type === 'player') {
                 const unitType = unitTypes[unit.type];
                 const lineOfSight = unitType.lineOfSight;
                 const startX = Math.max(0, Math.floor(unit.x - lineOfSight));
