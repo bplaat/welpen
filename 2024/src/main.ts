@@ -29,7 +29,7 @@ import { Button, Menu } from './ui.ts';
 import { Rect } from './math.ts';
 
 // MARK: Debug flag
-export let DEBUG = window.location.origin !== 'https://bplaat.github.io';
+export let DEBUG = import.meta.env.MODE !== 'production';
 export function setDebug(value: boolean) {
     DEBUG = value;
 }
@@ -168,7 +168,7 @@ class GameState {
         // Generate player start position
         const player = state.players.find((p) => p.type === PlayerType.Player)!;
         const playerStartSpot = state.map.findStartPosition(state.units, true);
-        state.units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 1, 'townCenter', player));
+        state.units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 1, 'town_center', player));
         state.units.push(new Unit(playerStartSpot.x, playerStartSpot.y - 1, 'king', player));
         state.units.push(new Unit(playerStartSpot.x - 1, playerStartSpot.y + 2, 'villager', player));
         state.units.push(new Unit(playerStartSpot.x, playerStartSpot.y + 2, 'villager', player));
@@ -402,14 +402,14 @@ function render(ctx: CanvasRenderingContext2D) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.fillRect(x, y, width, height);
 
-        for (let i = 0; i < controls.selectedUnits.length; i++) {
-            const unit = controls.selectedUnits[i];
-            const col = i % columns;
-            const row = Math.floor(i / columns);
-            const unitX = x + padding + col * (unitSize + padding);
-            const unitY = y + padding + row * (unitSize + padding);
-            ctx.drawImage(unit.image(), unitX, unitY, unitSize, unitSize);
-        }
+        // for (let i = 0; i < controls.selectedUnits.length; i++) {
+        //     const unit = controls.selectedUnits[i];
+        //     const col = i % columns;
+        //     const row = Math.floor(i / columns);
+        //     const unitX = x + padding + col * (unitSize + padding);
+        //     const unitY = y + padding + row * (unitSize + padding);
+        //     ctx.drawImage(unit.image(), unitX, unitY, unitSize, unitSize);
+        // }
     }
 
     // Draw player scores

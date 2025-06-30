@@ -4,10 +4,14 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "start": "vite",
+        "clean": "rm -rf target",
+        "predev": "node prebuild.js",
+        "dev": "vite",
+        "prebuild": "node prebuild.js",
         "build": "tsc && vite build"
     },
     "devDependencies": {
+        "spritesmith": "^3.5.1",
         "typescript": "~5.8.3",
         "vite": "^7.0.0"
     }

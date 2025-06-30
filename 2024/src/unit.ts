@@ -6,49 +6,9 @@
 
 import { Rect, Random, Point } from './math.ts';
 import { DEBUG, Player } from './main.ts';
-import { img } from './utils.ts';
 import type Map from './map.ts';
 import type { Camera } from './controls.ts';
-
-const unitImages: { [key: string]: { [key: string]: HTMLImageElement } } = {
-    nature: {
-        bushes: img('images/units/nature/bushes.png'),
-        tree1: img('images/units/nature/tree1.png'),
-        tree2: img('images/units/nature/tree2.png'),
-        stone: img('images/units/nature/stone.png'),
-        gold: img('images/units/nature/gold.png'),
-    },
-    blue: {
-        villager1: img('images/units/blue/villager1.png'),
-        villager2: img('images/units/blue/villager2.png'),
-        king: img('images/units/blue/king.png'),
-        spearman: img('images/units/blue/spearman.png'),
-        knight: img('images/units/blue/knight.png'),
-        monk: img('images/units/blue/monk.png'),
-        scout: img('images/units/blue/scout.png'),
-        townCenter: img('images/units/blue/town_center.png'),
-        house: img('images/units/blue/house.png'),
-        barracks: img('images/units/blue/barracks.png'),
-        storeHouse: img('images/units/blue/store_house.png'),
-        church: img('images/units/blue/church.png'),
-        tower: img('images/units/blue/tower.png'),
-    },
-    red: {
-        villager1: img('images/units/red/villager1.png'),
-        villager2: img('images/units/red/villager2.png'),
-        king: img('images/units/red/king.png'),
-        spearman: img('images/units/red/spearman.png'),
-        knight: img('images/units/red/knight.png'),
-        monk: img('images/units/red/monk.png'),
-        scout: img('images/units/red/scout.png'),
-        townCenter: img('images/units/red/town_center.png'),
-        house: img('images/units/red/house.png'),
-        barracks: img('images/units/red/barracks.png'),
-        storeHouse: img('images/units/red/store_house.png'),
-        church: img('images/units/red/church.png'),
-        tower: img('images/units/red/tower.png'),
-    },
-};
+import { atlas, atlasImage } from './atlas.ts';
 
 export interface UnitAction {
     x: number;
@@ -198,7 +158,7 @@ export const unitTypes: { [key: string]: UnitType } = {
     },
 
     // Buildings
-    townCenter: {
+    town_center: {
         type: UnitTypeType.Building,
         name: 'Town Center',
         width: 2,
@@ -239,7 +199,7 @@ export const unitTypes: { [key: string]: UnitType } = {
             { x: 1, y: 0, image: 'knight', name: 'Knight', cost: { food: 100, gold: 75 } },
         ],
     },
-    storeHouse: {
+    store_house: {
         type: UnitTypeType.Building,
         name: 'Store House',
         width: 2,
@@ -417,13 +377,6 @@ export default class Unit extends Point {
         }
     }
 
-    image() {
-        if (this.type === 'villager' || this.type === 'tree') {
-            return unitImages[this.player.color][`${this.type}${this.variant}`];
-        }
-        return unitImages[this.player.color][this.type];
-    }
-
     draw(ctx: CanvasRenderingContext2D, camera: Camera, isSelected: boolean) {
         const windowRect = new Rect(0, 0, window.innerWidth, window.innerHeight);
         const unitType = unitTypes[this.type];
@@ -436,11 +389,17 @@ export default class Unit extends Point {
         if (!windowRect.intersects(collisionRect)) return;
 
         // Draw unit image
+        const imageRect =
+            atlas[`src/images/units/${this.player.color}/${this.type}${this.variant ? `${this.variant}` : ''}.png`];
         if (this.flipX) {
             ctx.save();
             ctx.scale(-1, 1);
             ctx.drawImage(
-                this.image(),
+                atlasImage,
+                imageRect.x,
+                imageRect.y,
+                imageRect.width,
+                imageRect.height,
                 -(window.innerWidth / 2 + (this.x - camera.x + unitType.anchor.x) * camera.tileSize),
                 window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
                 unitType.width * camera.tileSize,
@@ -449,7 +408,11 @@ export default class Unit extends Point {
             ctx.restore();
         } else {
             ctx.drawImage(
-                this.image(),
+                atlasImage,
+                imageRect.x,
+                imageRect.y,
+                imageRect.width,
+                imageRect.height,
                 window.innerWidth / 2 + (this.x - camera.x - unitType.anchor.x) * camera.tileSize,
                 window.innerHeight / 2 + (this.y - camera.y - unitType.anchor.y) * camera.tileSize,
                 unitType.width * camera.tileSize,

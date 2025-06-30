@@ -9,16 +9,16 @@ import { Point, Random, Rect } from './math.ts';
 import Unit from './unit.ts';
 import { unitTypes } from './unit.ts';
 import { DEBUG, Player, PlayerType } from './main.ts';
-import { img } from './utils.ts';
 import type { Camera } from './controls.ts';
+import { atlas, atlasImage } from './atlas.ts';
 
 const TILE_IMAGES = [
-    img('images/tiles/deep_water.png'),
-    img('images/tiles/water.png'),
-    img('images/tiles/sand1.png'),
-    img('images/tiles/sand2.png'),
-    img('images/tiles/grass1.png'),
-    img('images/tiles/grass2.png'),
+    'src/images/tiles/deep_water.png',
+    'src/images/tiles/water.png',
+    'src/images/tiles/sand1.png',
+    'src/images/tiles/sand2.png',
+    'src/images/tiles/grass1.png',
+    'src/images/tiles/grass2.png',
 ];
 
 export default class Map {
@@ -222,8 +222,13 @@ export default class Map {
                 );
                 if (!tileRect.intersects(windowRect)) continue;
                 if (DEBUG || this.explored[y * this.width + x] === 1) {
+                    const imageRect = atlas[TILE_IMAGES[this.terrain[y * this.width + x]]];
                     ctx.drawImage(
-                        TILE_IMAGES[this.terrain[y * this.width + x]],
+                        atlasImage,
+                        imageRect.x,
+                        imageRect.y,
+                        imageRect.width,
+                        imageRect.height,
                         tileRect.x,
                         tileRect.y,
                         tileRect.width,
