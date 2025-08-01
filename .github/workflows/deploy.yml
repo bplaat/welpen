@@ -29,8 +29,10 @@ jobs:
       - uses: actions/configure-pages@v5
       - name: Install NPM dependencies
         run: cd 2024 &&  rm package-lock.json && npm install
+      - name: Check codebase
+        run: ./meta.sh check
       - name: Build website
-        run: ./build.sh
+        run: ./meta.sh build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: './target'

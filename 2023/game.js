@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2023 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { PerspectiveCamera, Object3D, Matrix4, Vector4, radians, rand } from './math.js';
 
 // Consts
@@ -92,16 +98,16 @@ vertexArrayExtension.bindVertexArrayOES(planeVertexArray);
 
 const planeBuffer = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, planeBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    // Vertex position, Texture position
-    -0.5, -0.5, 0, 0, 1,
-    0.5, -0.5, 0, 1, 1,
-    0.5, 0.5, 0, 1, 0,
+gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+        // Vertex position, Texture position
+        -0.5, -0.5, 0, 0, 1, 0.5, -0.5, 0, 1, 1, 0.5, 0.5, 0, 1, 0,
 
-    -0.5, -0.5, 0, 0, 1,
-    0.5, 0.5, 0, 1, 0,
-    -0.5, 0.5, 0, 0, 0
-]), gl.STATIC_DRAW);
+        -0.5, -0.5, 0, 0, 1, 0.5, 0.5, 0, 1, 0, -0.5, 0.5, 0, 0, 0,
+    ]),
+    gl.STATIC_DRAW
+);
 gl.enableVertexAttribArray(positionAttribute);
 gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, 5 * 4, 0);
 gl.enableVertexAttribArray(texturePositionAttribute);
@@ -113,6 +119,7 @@ vertexArrayExtension.bindVertexArrayOES(boxVertexArray);
 
 const boxBuffer = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, boxBuffer);
+// prettier-ignore
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
     // Vertex position, Texture position
     -0.5, -0.5, -0.5, 1, 1, // Front face
@@ -196,7 +203,14 @@ function loadTexture(url, transparent, flipY = false, repeat = false) {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         }
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
-        gl.texImage2D(gl.TEXTURE_2D, 0, transparent ? gl.RGBA : gl.RGB, transparent ? gl.RGBA : gl.RGB, gl.UNSIGNED_BYTE, image);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            transparent ? gl.RGBA : gl.RGB,
+            transparent ? gl.RGBA : gl.RGB,
+            gl.UNSIGNED_BYTE,
+            image
+        );
         gl.generateMipmap(gl.TEXTURE_2D);
     };
     return texture;
@@ -225,7 +239,7 @@ const medkitTexture = loadTexture('./images/medkit.png', true);
 // World
 const world = {
     width: 1000,
-    height: 1000
+    height: 1000,
 };
 
 // Objects
@@ -245,7 +259,7 @@ class Plane extends Object3D {
         this.transparent = false;
     }
 
-    update(delta) { }
+    update(delta) {}
 
     render() {
         vertexArrayExtension.bindVertexArrayOES(planeVertexArray);
@@ -281,7 +295,7 @@ class Box extends Object3D {
         this.transparent = false;
     }
 
-    update(delta) { }
+    update(delta) {}
 
     render() {
         vertexArrayExtension.bindVertexArrayOES(boxVertexArray);
@@ -505,9 +519,12 @@ class Unit extends Sprite {
 
             // Red part
             const redPart = new Object3D();
-            redPart.position = this.position.clone().add(new Vector4(0, this.scale.y / 3 * 2, 0, 0));
+            redPart.position = this.position.clone().add(new Vector4(0, (this.scale.y / 3) * 2, 0, 0));
             redPart.scale.y = 0.1;
-            redPart.rotation.y = Math.atan2(camera.position.x - redPart.position.x, camera.position.z - redPart.position.z);
+            redPart.rotation.y = Math.atan2(
+                camera.position.x - redPart.position.x,
+                camera.position.z - redPart.position.z
+            );
             redPart.updateMatrix();
             gl.uniformMatrix4fv(matrixUniform, false, redPart.matrix.elements);
             gl.uniform4f(colorUniform, 1, 0, 0, 1);
@@ -515,16 +532,19 @@ class Unit extends Sprite {
 
             // Green part
             const greenPart = new Object3D();
-            greenPart.position = this.position.clone().add(new Vector4(0, this.scale.y / 3 * 2, 0, 0));
+            greenPart.position = this.position.clone().add(new Vector4(0, (this.scale.y / 3) * 2, 0, 0));
 
             const update = new Vector4();
             update.z = 0.01;
             update.mul(Matrix4.rotateY(camera.rotation.y));
             greenPart.position.add(update);
 
-            greenPart.scale.x = this.health / this.maxHealth * this.scale.x;
+            greenPart.scale.x = (this.health / this.maxHealth) * this.scale.x;
             greenPart.scale.y = 0.1;
-            greenPart.rotation.y = Math.atan2(camera.position.x - greenPart.position.x, camera.position.z - greenPart.position.z);
+            greenPart.rotation.y = Math.atan2(
+                camera.position.x - greenPart.position.x,
+                camera.position.z - greenPart.position.z
+            );
             greenPart.updateMatrix();
             gl.uniformMatrix4fv(matrixUniform, false, greenPart.matrix.elements);
             gl.uniform4f(colorUniform, 0, 1, 0, 1);
@@ -719,7 +739,7 @@ function updateScore(newScore) {
     score = newScore;
     if (score > highscore) {
         highscore = score;
-        localStorage.setItem('highscore', highscore)
+        localStorage.setItem('highscore', highscore);
     }
     scoreLabel.textContent = `Score: ${score.toFixed(0)}`;
     highscoreLabel.textContent = `High Score: ${highscore.toFixed(0)}`;
@@ -757,7 +777,7 @@ window.addEventListener('mouseup', (event) => {
         objects.push(bullet);
         shootSound.play();
     }
-})
+});
 
 document.addEventListener('pointerlockchange', function () {
     lock = document.pointerLockElement == canvas;
@@ -843,19 +863,45 @@ function render() {
     if (lock) {
         // Draw crosshair
         gl.bindTexture(gl.TEXTURE_2D, blankTexture);
-        gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect((window.innerWidth - 32) / 2, (window.innerHeight - 4) / 2, 32, 4).elements);
+        gl.uniformMatrix4fv(
+            matrixUniform,
+            false,
+            Matrix4.rect((window.innerWidth - 32) / 2, (window.innerHeight - 4) / 2, 32, 4).elements
+        );
         gl.uniform4f(colorUniform, 1, 1, 1, 0.9);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
-        gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect((window.innerWidth - 4) / 2, (window.innerHeight - 32) / 2, 4, 32).elements);
+        gl.uniformMatrix4fv(
+            matrixUniform,
+            false,
+            Matrix4.rect((window.innerWidth - 4) / 2, (window.innerHeight - 32) / 2, 4, 32).elements
+        );
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         // Draw gun
         const gunSize = window.innerWidth >= 1024 ? 512 : 256;
         gl.bindTexture(gl.TEXTURE_2D, gunTexture);
         if (performance.now() < gunUpTimout) {
-            gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect((window.innerWidth - gunSize * 0.6) / 2, window.innerHeight - gunSize * 0.6, gunSize, gunSize * 0.6).elements);
+            gl.uniformMatrix4fv(
+                matrixUniform,
+                false,
+                Matrix4.rect(
+                    (window.innerWidth - gunSize * 0.6) / 2,
+                    window.innerHeight - gunSize * 0.6,
+                    gunSize,
+                    gunSize * 0.6
+                ).elements
+            );
         } else {
-            gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect((window.innerWidth - gunSize * 0.6) / 2, window.innerHeight - gunSize * 0.5, gunSize, gunSize * 0.5).elements);
+            gl.uniformMatrix4fv(
+                matrixUniform,
+                false,
+                Matrix4.rect(
+                    (window.innerWidth - gunSize * 0.6) / 2,
+                    window.innerHeight - gunSize * 0.5,
+                    gunSize,
+                    gunSize * 0.5
+                ).elements
+            );
         }
         gl.uniform4f(colorUniform, 1, 1, 1, 1);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -864,12 +910,20 @@ function render() {
         const healthbarSize = window.innerWidth >= 1024 ? 256 : 128;
         // Red part
         gl.bindTexture(gl.TEXTURE_2D, blankTexture);
-        gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect(32, window.innerHeight - 16 - 32, healthbarSize, 16).elements);
+        gl.uniformMatrix4fv(
+            matrixUniform,
+            false,
+            Matrix4.rect(32, window.innerHeight - 16 - 32, healthbarSize, 16).elements
+        );
         gl.uniform4f(colorUniform, 1, 0, 0, 1);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         // Green part
-        gl.uniformMatrix4fv(matrixUniform, false, Matrix4.rect(32, window.innerHeight - 16 - 32, health / maxHealth * healthbarSize, 16).elements);
+        gl.uniformMatrix4fv(
+            matrixUniform,
+            false,
+            Matrix4.rect(32, window.innerHeight - 16 - 32, (health / maxHealth) * healthbarSize, 16).elements
+        );
         gl.uniform4f(colorUniform, 0, 1, 0, 1);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     } else {

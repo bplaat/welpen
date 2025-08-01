@@ -1,12 +1,33 @@
+/*
+ * Copyright (c) 2021 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 const canvas = document.getElementById('canvas'),
     ctx = canvas.getContext('2d');
-let player = {}, frame, frame2, stars, monsters, score, key, running;
+let player = {},
+    frame,
+    frame2,
+    stars,
+    monsters,
+    score,
+    key,
+    running;
 
 function start() {
-    player.x = canvas.width / 2, player.y = canvas.height / 2, player.size = 32,
-        player.speed = 2, frame = 0, frame2 = 0, stars = [], monsters = [], score = 0, key = 's',
-        running = true, pause = false;
+    (player.x = canvas.width / 2),
+        (player.y = canvas.height / 2),
+        (player.size = 32),
+        (player.speed = 2),
+        (frame = 0),
+        (frame2 = 0),
+        (stars = []),
+        (monsters = []),
+        (score = 0),
+        (key = 's'),
+        (running = true),
+        (pause = false);
 }
 
 function loop() {
@@ -17,7 +38,7 @@ function loop() {
             const star = {
                 size: Math.floor(Math.random() * 24) + 16,
                 character: ['⭐', '🌍', '🌑', '🌞'][Math.floor(Math.random() * 4)],
-                time: Date.now() + (Math.floor(Math.random() * 10) + 10) * 1000
+                time: Date.now() + (Math.floor(Math.random() * 10) + 10) * 1000,
             };
             do {
                 star.x = Math.floor(Math.random() * 800);
@@ -35,7 +56,7 @@ function loop() {
                 }
             } while (true);
             stars.push(star);
-            player.speed += 0.010;
+            player.speed += 0.01;
         } else {
             frame++;
         }
@@ -46,7 +67,7 @@ function loop() {
                 const monster = {
                     size: Math.floor(Math.random() * 16) + 16,
                     character: ['👽', '🛸', '👾'][Math.floor(Math.random() * 3)],
-                    time: Date.now() + (Math.floor(Math.random() * 7.5) + 2.5) * 1000
+                    time: Date.now() + (Math.floor(Math.random() * 7.5) + 2.5) * 1000,
                 };
                 const corner = Math.floor(Math.random() * 4);
                 if (corner == 0) {
@@ -87,9 +108,7 @@ function loop() {
 
         for (let i = 0; i < stars.length; i++) {
             const star = stars[i];
-            if (
-                Math.sqrt((player.x - star.x) ** 2 + (player.y - star.y) ** 2) < star.size
-            ) {
+            if (Math.sqrt((player.x - star.x) ** 2 + (player.y - star.y) ** 2) < star.size) {
                 running = false;
                 break;
             }
@@ -101,9 +120,7 @@ function loop() {
 
         for (let i = 0; i < monsters.length; i++) {
             const monster = monsters[i];
-            if (
-                Math.sqrt((player.x - monster.x) ** 2 + (player.y - monster.y) ** 2) < monster.size
-            ) {
+            if (Math.sqrt((player.x - monster.x) ** 2 + (player.y - monster.y) ** 2) < monster.size) {
                 running = false;
                 break;
             }
@@ -135,7 +152,11 @@ function loop() {
     }
     for (const monster of monsters) {
         ctx.font = monster.size + 'px sans-serif';
-        ctx.fillText(monster.character, Math.floor(monster.x) - monster.size / 2, Math.floor(monster.y) - monster.size / 2);
+        ctx.fillText(
+            monster.character,
+            Math.floor(monster.x) - monster.size / 2,
+            Math.floor(monster.y) - monster.size / 2
+        );
     }
 
     ctx.font = player.size + 'px sans-serif';
@@ -182,12 +203,18 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-window.onkeydown = event => {
+window.onkeydown = (event) => {
     event.preventDefault();
 
     if (
-        event.key == 'w' || event.key == 'a' || event.key == 's' || event.key == 'd' ||
-        event.key == 'ArrowUp' || event.key == 'ArrowLeft' || event.key == 'ArrowRight' || event.key == 'ArrowDown'
+        event.key == 'w' ||
+        event.key == 'a' ||
+        event.key == 's' ||
+        event.key == 'd' ||
+        event.key == 'ArrowUp' ||
+        event.key == 'ArrowLeft' ||
+        event.key == 'ArrowRight' ||
+        event.key == 'ArrowDown'
     ) {
         key = event.key;
     }

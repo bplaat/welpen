@@ -1,9 +1,15 @@
+/*
+ * Copyright (c) 2023 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 export function degrees(radians) {
-    return radians * 180 / Math.PI;
+    return (radians * 180) / Math.PI;
 }
 
 export function radians(degrees) {
-    return degrees * Math.PI / 180;
+    return (degrees * Math.PI) / 180;
 }
 
 export function rand(min, max) {
@@ -75,6 +81,7 @@ export class Matrix4 {
     }
 
     static identity() {
+        // prettier-ignore
         return new Matrix4([
             1, 0, 0, 0,
             0, 1, 0, 0,
@@ -86,6 +93,7 @@ export class Matrix4 {
     static perspective(fov, aspect, near, far) {
         const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
         const r = 1.0 / (near - far);
+        // prettier-ignore
         return new Matrix4([
             f / aspect, 0, 0, 0,
             0, f, 0, 0,
@@ -95,6 +103,7 @@ export class Matrix4 {
     }
 
     static translate(x, y, z) {
+        // prettier-ignore
         return new Matrix4([
             1, 0, 0, 0,
             0, 1, 0, 0,
@@ -106,6 +115,7 @@ export class Matrix4 {
     static rotateX(x) {
         const c = Math.cos(x);
         const s = Math.sin(x);
+        // prettier-ignore
         return new Matrix4([
             1, 0, 0, 0,
             0, c, s, 0,
@@ -117,6 +127,7 @@ export class Matrix4 {
     static rotateY(y) {
         const c = Math.cos(y);
         const s = Math.sin(y);
+        // prettier-ignore
         return new Matrix4([
             c, 0, -s, 0,
             0, 1, 0, 0,
@@ -128,6 +139,7 @@ export class Matrix4 {
     static rotateZ(z) {
         const c = Math.cos(z);
         const s = Math.sin(z);
+        // prettier-ignore
         return new Matrix4([
             c, s, 0, 0,
             -s, c, 0, 0,
@@ -137,6 +149,7 @@ export class Matrix4 {
     }
 
     static scale(x, y, z) {
+        // prettier-ignore
         return new Matrix4([
             x, 0, 0, 0,
             0, y, 0, 0,
@@ -146,6 +159,7 @@ export class Matrix4 {
     }
 
     static flat(width, height) {
+        // prettier-ignore
         return new Matrix4([
             2 / width, 0, 0, 0,
             0, -2 / height, 0, 0,
@@ -155,6 +169,7 @@ export class Matrix4 {
     }
 
     static rect(x, y, width, height) {
+        // prettier-ignore
         return new Matrix4([
             width, 0, 0, 0,
             0, height, 0, 0,
@@ -206,6 +221,7 @@ export class Vector4 {
             this.z *= rhs.z;
             this.w *= rhs.w;
         }
+        // prettier-ignore
         if (rhs instanceof Matrix4) {
             const x = rhs.elements[0 * 4 + 0] * this.x + rhs.elements[0 * 4 + 1] * this.y + rhs.elements[0 * 4 + 2] * this.z + rhs.elements[0 * 4 + 3] * this.w;
             const y = rhs.elements[1 * 4 + 0] * this.x + rhs.elements[1 * 4 + 1] * this.y + rhs.elements[1 * 4 + 2] * this.z + rhs.elements[1 * 4 + 3] * this.w;
