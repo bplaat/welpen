@@ -33,7 +33,7 @@ function check() {
 
 function build() {
     rm -rf target && mkdir -p target
-    cp -r 2021 2022 2023 index.html target
+    cp -r 2021 2022 2023 2025 index.html target
 
     (cd 2024 && npm run build)
     rm -rf target/2024
