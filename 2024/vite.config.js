@@ -7,7 +7,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-    base: '/welpen/2024/',
+    base: '/2024/',
     build: {
         outDir: 'target/dist',
     },
