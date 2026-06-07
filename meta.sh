@@ -38,6 +38,10 @@ function build() {
     (cd 2024 && npm run build)
     rm -rf target/2024
     cp -r 2024/target/dist target/2024
+
+    (cd 2026 && npm run build)
+    rm -rf target/2026
+    cp -r 2026/target/dist target/2026
 }
 
 case "${1:-check}" in

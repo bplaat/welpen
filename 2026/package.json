@@ -1,0 +1,21 @@
+{
+    "name": "wild-west",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "clean": "rm -rf target",
+        "dev": "vite",
+        "build": "tsc && vite build"
+    },
+    "dependencies": {
+        "stats.js": "^0.17.0",
+        "three": "^0.177.0"
+    },
+    "devDependencies": {
+        "@types/stats.js": "^0.17.4",
+        "@types/three": "^0.177.0",
+        "typescript": "~5.8.3",
+        "vite": "^7.0.0"
+    }
+}
