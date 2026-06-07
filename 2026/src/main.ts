@@ -12,6 +12,8 @@ import { loadCharacter } from './character.ts';
 
 async function main(): Promise<void> {
     const [map, character] = await Promise.all([loadMap(), loadCharacter()]);
+    map.terrain.layers ??= [];
+    map.terrain.layerWeights ??= [];
     const ctx = createRenderer(document.body, map);
     ctx.scene.add(character.group);
 

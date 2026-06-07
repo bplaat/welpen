@@ -13,6 +13,7 @@ import {
     buildObjectGroup,
     rebuildObjectGroup,
     rebuildTerrain,
+    getTerrainY,
     createRenderer,
     renderFrame,
 } from '../renderer.ts';
@@ -52,7 +53,7 @@ let defsTransformHelper: THREE.Object3D;
 let defsGroup: THREE.Group;
 
 type Tab = 'world' | 'defs';
-type MapTool = 'select' | 'place' | 'raise' | 'lower';
+type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint';
 type TransformMode = 'translate' | 'rotate' | 'scale';
 
 let activeTab: Tab = 'world';
@@ -66,6 +67,9 @@ let placeDefId: string | null = null;
 let brushSize = 4;
 let brushHit: THREE.Vector3 | null = null;
 let isMouseDown = false;
+let isRightMouseDown = false;
+let paintLayerIndex = 0;
+let levelTargetHeight = 0;
 
 // Defs editor selection
 let defsSelDefId: string | null = null;
@@ -724,27 +728,96 @@ function renderMapSettings(body: HTMLElement): void {
         textureField('Ground Texture', map.terrain.texture, (v) => {
             map.terrain.texture = v;
             rebuildTerrain(ctx, map.terrain);
-            terrainEditor.setMesh(ctx.terrainMesh, map.terrain);
+            terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
         })
     );
+
+    body.appendChild(makeSection('Terrain Layers'));
+    for (let i = 0; i < map.terrain.layers.length; i++) {
+        const layer = map.terrain.layers[i]!;
+        const layerIdx = i;
+        const item = el('div', 'list-item');
+        item.classList.toggle('selected', paintLayerIndex === layerIdx);
+        item.addEventListener('click', () => {
+            paintLayerIndex = layerIdx;
+            setTool('paint');
+            renderRightPanel();
+        });
+        const label = el('span', 'list-label', layer.name);
+        const editBtn = el<HTMLButtonElement>('button', 'tb-btn');
+        editBtn.textContent = 'Edit';
+        editBtn.style.padding = '2px 7px';
+        editBtn.style.fontSize = '11px';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openLayerDialog(layerIdx);
+        });
+        const delBtn = el<HTMLButtonElement>('button', 'tb-btn danger');
+        delBtn.textContent = '−';
+        delBtn.style.padding = '2px 7px';
+        delBtn.style.fontSize = '11px';
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            map.terrain.layers.splice(layerIdx, 1);
+            map.terrain.layerWeights.splice(layerIdx, 1);
+            if (paintLayerIndex >= map.terrain.layers.length) {
+                paintLayerIndex = Math.max(0, map.terrain.layers.length - 1);
+            }
+            rebuildTerrain(ctx, map.terrain);
+            terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
+            contourMesh.geometry = ctx.terrainMesh.geometry;
+            renderRightPanel();
+        });
+        item.appendChild(label);
+        item.appendChild(editBtn);
+        item.appendChild(delBtn);
+        body.appendChild(item);
+    }
+
+    if (map.terrain.layers.length < 4) {
+        const addBtn = el<HTMLButtonElement>('button', 'list-add-btn');
+        addBtn.textContent = '+ Add Layer';
+        addBtn.addEventListener('click', () => openLayerDialog(-1));
+        body.appendChild(addBtn);
+    }
+
     body.appendChild(
         actionBtn('Apply Terrain Size', 'primary', () => {
             const oldH = map.terrain.heights;
             const oldW = map.terrain.width;
             const oldD = map.terrain.depth;
             const newH = new Array(newW * newD).fill(0) as number[];
-            for (let z = 0; z < Math.min(newD, oldD); z++) {
-                for (let x = 0; x < Math.min(newW, oldW); x++) {
-                    newH[z * newW + x] = oldH[z * oldW + x] ?? 0;
+            const offsetX = Math.floor((newW - oldW) / 2);
+            const offsetZ = Math.floor((newD - oldD) / 2);
+            for (let z = 0; z < oldD; z++) {
+                for (let x = 0; x < oldW; x++) {
+                    const nx = x + offsetX;
+                    const nz = z + offsetZ;
+                    if (nx >= 0 && nx < newW && nz >= 0 && nz < newD) {
+                        newH[nz * newW + nx] = oldH[z * oldW + x] ?? 0;
+                    }
                 }
             }
+            map.terrain.layerWeights = map.terrain.layerWeights.map((weights) => {
+                const newWeights = new Array(newW * newD).fill(0) as number[];
+                for (let z = 0; z < oldD; z++) {
+                    for (let x = 0; x < oldW; x++) {
+                        const nx = x + offsetX;
+                        const nz = z + offsetZ;
+                        if (nx >= 0 && nx < newW && nz >= 0 && nz < newD) {
+                            newWeights[nz * newW + nx] = weights[z * oldW + x] ?? 0;
+                        }
+                    }
+                }
+                return newWeights;
+            });
             map.terrain.width = newW;
             map.terrain.depth = newD;
             map.terrain.cellSize = newCS;
             map.terrain.heights = newH;
             rebuildTerrain(ctx, map.terrain);
-            terrainEditor.setMesh(ctx.terrainMesh, map.terrain);
+            terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
         })
     );
@@ -1103,19 +1176,95 @@ function renderDefsRightPanel(body: HTMLElement): void {
 
 // ---- Tool management ----
 
+// ---- Layer dialog ----
+
+function openLayerDialog(layerIdx: number): void {
+    const dialog = $('layer-dialog') as HTMLDialogElement;
+    const titleEl = $('layer-dialog-title');
+    const nameInp = $('layer-dialog-name') as HTMLInputElement;
+    const texInp = $('layer-dialog-texture') as HTMLInputElement;
+    const repeatInp = $('layer-dialog-repeat') as HTMLInputElement;
+
+    const isEdit = layerIdx >= 0;
+    titleEl.textContent = isEdit ? 'Edit Layer' : 'Add Layer';
+    nameInp.value = isEdit ? (map.terrain.layers[layerIdx]?.name ?? '') : '';
+    texInp.value = isEdit ? (map.terrain.layers[layerIdx]?.texture ?? '') : map.terrain.texture;
+    repeatInp.value = String(isEdit ? (map.terrain.layers[layerIdx]?.repeat ?? 1) : 1);
+
+    const save = $('layer-dialog-save');
+    const cancel = $('layer-dialog-cancel');
+    const upload = $('layer-dialog-upload');
+
+    const onSave = (): void => {
+        const name = nameInp.value.trim() || 'Layer';
+        const texture = texInp.value.trim() || map.terrain.texture;
+        const repeat = Math.max(0.25, parseFloat(repeatInp.value) || 1);
+        if (isEdit) {
+            map.terrain.layers[layerIdx]!.name = name;
+            map.terrain.layers[layerIdx]!.texture = texture;
+            map.terrain.layers[layerIdx]!.repeat = repeat;
+        } else {
+            const newIndex = map.terrain.layers.length;
+            map.terrain.layers.push({ name, texture, repeat });
+            map.terrain.layerWeights[newIndex] = new Array(map.terrain.width * map.terrain.depth).fill(0) as number[];
+            paintLayerIndex = newIndex;
+        }
+        rebuildTerrain(ctx, map.terrain);
+        terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
+        contourMesh.geometry = ctx.terrainMesh.geometry;
+        if (!isEdit) setTool('paint');
+        dialog.close();
+        renderRightPanel();
+    };
+
+    const onCancel = (): void => dialog.close();
+
+    const onUpload = (): void => {
+        const fi = document.createElement('input');
+        fi.type = 'file';
+        fi.accept = '.png,.jpg,.jpeg';
+        fi.addEventListener('change', () => {
+            const file = fi.files?.[0];
+            if (!file) return;
+            uploadTexture(file)
+                .then((path) => { texInp.value = path; })
+                .catch((e: unknown) => alert(`Upload failed: ${String(e)}`));
+        });
+        fi.click();
+    };
+
+    // Replace listeners to avoid stacking
+    const newSave = save.cloneNode(true) as HTMLElement;
+    const newCancel = cancel.cloneNode(true) as HTMLElement;
+    const newUpload = upload.cloneNode(true) as HTMLElement;
+    save.replaceWith(newSave);
+    cancel.replaceWith(newCancel);
+    upload.replaceWith(newUpload);
+    newSave.addEventListener('click', onSave);
+    newCancel.addEventListener('click', onCancel);
+    newUpload.addEventListener('click', onUpload);
+
+    dialog.showModal();
+}
+
 function setTool(tool: MapTool): void {
     currentTool = tool;
-    (['select', 'place', 'raise', 'lower'] as const).forEach((t) => {
+    (['select', 'place', 'raise', 'lower', 'level', 'paint'] as const).forEach((t) => {
         $(`btn-${t}`).classList.toggle('active', t === tool);
     });
-    const isTerrain = tool === 'raise' || tool === 'lower';
+    const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint';
     $('brush-controls').classList.toggle('visible', isTerrain);
     terrainEditor.showBrush(isTerrain);
-    contourMesh.visible = isTerrain;
+    contourMesh.visible = tool === 'raise' || tool === 'lower' || tool === 'level';
     if (tool !== 'select') {
-        mapSel = null;
         transformControls.detach();
         selectionBox.visible = false;
+        // Terrain tools keep settings open so the layer list stays visible
+        if (isTerrain) {
+            mapSel = 'settings';
+        } else {
+            mapSel = null;
+        }
     }
     if (tool === 'place') {
         placeDefId = map.objectDefs[0]?.id ?? null;
@@ -1179,10 +1328,11 @@ function setupViewportEvents(): void {
     const canvas = ctx.renderer.domElement;
 
     canvas.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        isMouseDown = true;
+        if (e.button !== 0 && e.button !== 2) return;
+        if (e.button === 0) isMouseDown = true;
+        if (e.button === 2) isRightMouseDown = true;
         if (activeTab !== 'world') return;
-        if (currentTool === 'select') {
+        if (e.button === 0 && currentTool === 'select') {
             if (transformControls.dragging) return;
             const group = getObjectHit(e);
             if (group) {
@@ -1190,7 +1340,7 @@ function setupViewportEvents(): void {
             } else {
                 clearSelection();
             }
-        } else if (currentTool === 'place') {
+        } else if (e.button === 0 && currentTool === 'place') {
             if (!placeDefId) return;
             const def = map.objectDefs.find((d) => d.id === placeDefId);
             if (!def) return;
@@ -1210,22 +1360,33 @@ function setupViewportEvents(): void {
             // Stay in place mode - do not switch to select
             renderLeftPanel();
         } else if (currentTool === 'raise' || currentTool === 'lower') {
+            if (e.button !== 0) return;
+            orbitControls.enabled = false;
+            brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+        } else if (currentTool === 'level') {
+            if (e.button !== 0) return;
+            orbitControls.enabled = false;
+            brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+            if (brushHit) levelTargetHeight = getTerrainY(map.terrain, brushHit.x, brushHit.z);
+        } else if (currentTool === 'paint') {
             orbitControls.enabled = false;
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
 
     document.addEventListener('mouseup', (e) => {
-        if (e.button !== 0) return;
-        isMouseDown = false;
-        if (currentTool === 'raise' || currentTool === 'lower') orbitControls.enabled = true;
+        if (e.button === 0) isMouseDown = false;
+        if (e.button === 2) isRightMouseDown = false;
+        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint') {
+            orbitControls.enabled = true;
+        }
     });
 
     canvas.addEventListener('mousemove', (e) => {
         if (activeTab !== 'world') return;
         if (currentTool === 'place') {
             updateGhost(e);
-        } else if (currentTool === 'raise' || currentTool === 'lower') {
+        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint') {
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
@@ -1245,6 +1406,8 @@ function setupToolbarEvents(): void {
     $('btn-place').addEventListener('click', () => setTool('place'));
     $('btn-raise').addEventListener('click', () => setTool('raise'));
     $('btn-lower').addEventListener('click', () => setTool('lower'));
+    $('btn-level').addEventListener('click', () => setTool('level'));
+    $('btn-paint').addEventListener('click', () => setTool('paint'));
     $('btn-translate').addEventListener('click', () => setTransformMode('translate'));
     $('btn-rotate').addEventListener('click', () => setTransformMode('rotate'));
     $('btn-scale').addEventListener('click', () => setTransformMode('scale'));
@@ -1394,6 +1557,8 @@ function setupToolbarEvents(): void {
             if (e.code === 'KeyP') setTool('place');
             if (e.code === 'KeyR') setTool('raise');
             if (e.code === 'KeyL') setTool('lower');
+            if (e.code === 'KeyF') setTool('level');
+            if (e.code === 'KeyN') setTool('paint');
             if (e.code === 'KeyG') setTransformMode('translate');
             if (e.code === 'KeyE') setTransformMode('rotate');
             if (e.code === 'KeyS') setTransformMode('scale');
@@ -1414,6 +1579,8 @@ function setupToolbarEvents(): void {
 
 async function main(): Promise<void> {
     map = await loadMap();
+    map.terrain.layers ??= [];
+    map.terrain.layerWeights ??= [];
 
     const viewport = $('viewport');
     ctx = createRenderer(viewport, map);
@@ -1470,7 +1637,7 @@ async function main(): Promise<void> {
     selectionBox.visible = false;
     ctx.scene.add(selectionBox);
 
-    terrainEditor = new TerrainEditor(map.terrain, ctx.terrainMesh, ctx.scene);
+    terrainEditor = new TerrainEditor(map.terrain, ctx.terrainMesh, ctx.terrainSplatMap, ctx.scene);
 
     // Contour line overlay — shown only during raise/lower terrain editing
     contourMesh = new THREE.Mesh(
@@ -1576,6 +1743,12 @@ async function main(): Promise<void> {
                     map.objects,
                     ctx.objectGroups
                 );
+            }
+            if (isMouseDown && currentTool === 'level' && brushHit) {
+                terrainEditor.applyLevelBrush(brushHit, levelTargetHeight, brushSize, delta, map.objects, ctx.objectGroups);
+            }
+            if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
+                terrainEditor.applyPaintBrush(brushHit, paintLayerIndex, brushSize, delta, isRightMouseDown);
             }
             renderFrame(ctx);
         } else {

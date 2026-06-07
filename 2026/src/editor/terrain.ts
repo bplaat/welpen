@@ -6,20 +6,25 @@
 
 import * as THREE from 'three';
 import type { ObjectInstance, Terrain } from '../types.ts';
-import { getTerrainY, updateTerrainGeometry } from '../renderer.ts';
+import { getTerrainY, updateTerrainGeometry, updateTerrainSplatMap } from '../renderer.ts';
 
 const RAISE_SPEED = 3;
+const LEVEL_SPEED = 5;
+const PAINT_SPEED = 2;
+const ERASE_SPEED = 6;
 const SNAP_THRESHOLD = 0.4; // snap if instance Y is within this many units of terrain Y
 
 export class TerrainEditor {
     private terrain: Terrain;
     private terrainMesh: THREE.Mesh;
+    private splatMap: THREE.DataTexture;
     private raycaster = new THREE.Raycaster();
     private brushIndicator: THREE.Mesh;
 
-    constructor(terrain: Terrain, terrainMesh: THREE.Mesh, scene: THREE.Scene) {
+    constructor(terrain: Terrain, terrainMesh: THREE.Mesh, splatMap: THREE.DataTexture, scene: THREE.Scene) {
         this.terrain = terrain;
         this.terrainMesh = terrainMesh;
+        this.splatMap = splatMap;
 
         const geo = new THREE.CircleGeometry(1, 32);
         geo.rotateX(-Math.PI / 2);
@@ -36,9 +41,10 @@ export class TerrainEditor {
         scene.add(this.brushIndicator);
     }
 
-    setMesh(mesh: THREE.Mesh, terrain: Terrain): void {
+    setMesh(mesh: THREE.Mesh, terrain: Terrain, splatMap: THREE.DataTexture): void {
         this.terrainMesh = mesh;
         this.terrain = terrain;
+        this.splatMap = splatMap;
     }
 
     showBrush(show: boolean): void {
@@ -104,6 +110,76 @@ export class TerrainEditor {
                 if (group) group.position.y = terrainY;
             }
         }
+    }
+
+    applyLevelBrush(
+        hitPoint: THREE.Vector3,
+        targetHeight: number,
+        brushSize: number,
+        delta: number,
+        instances: ObjectInstance[],
+        objectGroups: Map<string, THREE.Group>
+    ): void {
+        const { width, depth, cellSize, heights } = this.terrain;
+        const halfW = ((width - 1) * cellSize) / 2;
+        const halfD = ((depth - 1) * cellSize) / 2;
+        const maxStep = LEVEL_SPEED * delta;
+
+        for (let z = 0; z < depth; z++) {
+            for (let x = 0; x < width; x++) {
+                const wx = x * cellSize - halfW;
+                const wz = z * cellSize - halfD;
+                const dist = Math.sqrt((wx - hitPoint.x) ** 2 + (wz - hitPoint.z) ** 2);
+                if (dist < brushSize) {
+                    const idx = z * width + x;
+                    const diff = targetHeight - heights[idx]!;
+                    const step = maxStep * (1 - dist / brushSize);
+                    heights[idx] = Math.abs(diff) <= step ? targetHeight : heights[idx]! + Math.sign(diff) * step;
+                }
+            }
+        }
+        updateTerrainGeometry(this.terrainMesh, this.terrain);
+
+        for (const inst of instances) {
+            const [ix, iy, iz] = inst.position;
+            const terrainY = getTerrainY(this.terrain, ix, iz);
+            if (Math.abs(iy - terrainY) <= SNAP_THRESHOLD) {
+                inst.position[1] = terrainY;
+                const group = objectGroups.get(inst.id);
+                if (group) group.position.y = terrainY;
+            }
+        }
+    }
+
+    applyPaintBrush(
+        hitPoint: THREE.Vector3,
+        layerIndex: number,
+        brushSize: number,
+        delta: number,
+        erase: boolean
+    ): void {
+        const { width, depth, cellSize, layerWeights } = this.terrain;
+        while (layerWeights.length <= layerIndex) {
+            layerWeights.push(new Array(width * depth).fill(0) as number[]);
+        }
+        const weights = layerWeights[layerIndex]!;
+
+        const halfW = ((width - 1) * cellSize) / 2;
+        const halfD = ((depth - 1) * cellSize) / 2;
+        const speed = (erase ? -ERASE_SPEED : PAINT_SPEED) * delta;
+
+        for (let z = 0; z < depth; z++) {
+            for (let x = 0; x < width; x++) {
+                const wx = x * cellSize - halfW;
+                const wz = z * cellSize - halfD;
+                const dist = Math.sqrt((wx - hitPoint.x) ** 2 + (wz - hitPoint.z) ** 2);
+                if (dist < brushSize) {
+                    const idx = z * width + x;
+                    weights[idx] = Math.max(0, Math.min(1, weights[idx]! + speed * (1 - dist / brushSize)));
+                }
+            }
+        }
+        updateTerrainSplatMap(this.splatMap, this.terrain);
     }
 
     dispose(): void {

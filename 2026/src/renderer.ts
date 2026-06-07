@@ -20,6 +20,37 @@ import type {
     Terrain,
 } from './types.ts';
 
+// --- Terrain splatmap ---
+
+export function createSplatMap(terrain: Terrain): THREE.DataTexture {
+    const { width, depth, layerWeights } = terrain;
+    const data = new Uint8Array(width * depth * 4);
+    for (let i = 0; i < width * depth; i++) {
+        data[i * 4 + 0] = Math.round((layerWeights[0]?.[i] ?? 0) * 255);
+        data[i * 4 + 1] = Math.round((layerWeights[1]?.[i] ?? 0) * 255);
+        data[i * 4 + 2] = Math.round((layerWeights[2]?.[i] ?? 0) * 255);
+        data[i * 4 + 3] = Math.round((layerWeights[3]?.[i] ?? 0) * 255);
+    }
+    const tex = new THREE.DataTexture(data, width, depth, THREE.RGBAFormat);
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.flipY = false;
+    tex.needsUpdate = true;
+    return tex;
+}
+
+export function updateTerrainSplatMap(splatMap: THREE.DataTexture, terrain: Terrain): void {
+    const { width, depth, layerWeights } = terrain;
+    const data = splatMap.image.data as Uint8Array;
+    for (let i = 0; i < width * depth; i++) {
+        data[i * 4 + 0] = Math.round((layerWeights[0]?.[i] ?? 0) * 255);
+        data[i * 4 + 1] = Math.round((layerWeights[1]?.[i] ?? 0) * 255);
+        data[i * 4 + 2] = Math.round((layerWeights[2]?.[i] ?? 0) * 255);
+        data[i * 4 + 3] = Math.round((layerWeights[3]?.[i] ?? 0) * 255);
+    }
+    splatMap.needsUpdate = true;
+}
+
 // --- Texture cache ---
 
 const textureCache = new Map<string, THREE.Texture>();
@@ -75,7 +106,7 @@ export function applyLight(
 
 // --- Terrain ---
 
-export function buildTerrainMesh(terrain: Terrain): THREE.Mesh {
+export function buildTerrainMesh(terrain: Terrain, splatMap: THREE.DataTexture): THREE.Mesh {
     const { width, depth, cellSize, heights } = terrain;
     const geo = new THREE.PlaneGeometry(width * cellSize, depth * cellSize, width - 1, depth - 1);
     geo.rotateX(-Math.PI / 2);
@@ -91,7 +122,64 @@ export function buildTerrainMesh(terrain: Terrain): THREE.Mesh {
     tex.repeat.set(width / 4, depth / 4);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
 
+    const dummyData = new Uint8Array([0, 0, 0, 255]);
+    const dummyTex = new THREE.DataTexture(dummyData, 1, 1);
+    dummyTex.needsUpdate = true;
+
+    const layerTextures = [0, 1, 2, 3].map((i) => {
+        const layer = terrain.layers[i];
+        if (!layer) return dummyTex;
+        const t = loadTexture(layer.texture);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        return t;
+    });
+
+    // Scale to convert world XZ position to 0..1 splatmap UV
+    const splatScale = new THREE.Vector2(1 / ((width - 1) * cellSize), 1 / ((depth - 1) * cellSize));
+
     const mat = new THREE.MeshLambertMaterial({ map: tex });
+    mat.onBeforeCompile = (shader) => {
+        shader.uniforms['splatMap'] = { value: splatMap };
+        shader.uniforms['splatScale'] = { value: splatScale };
+        for (let i = 0; i < 4; i++) {
+            shader.uniforms[`layerMap${i}`] = { value: layerTextures[i] };
+            const r = terrain.layers[i]?.repeat ?? 1;
+            shader.uniforms[`layerRepeat${i}`] = { value: new THREE.Vector2((width / 4) * r, (depth / 4) * r) };
+        }
+
+        // Derive splatmap UV from world XZ position (avoids PlaneGeometry UV flip issues)
+        shader.vertexShader = `varying vec2 vSplatUv;\nuniform vec2 splatScale;\n` + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace(
+            `#include <begin_vertex>`,
+            `#include <begin_vertex>\nvSplatUv = transformed.xz * splatScale + 0.5;`
+        );
+
+        shader.fragmentShader =
+            `varying vec2 vSplatUv;
+uniform sampler2D splatMap;
+uniform sampler2D layerMap0;
+uniform sampler2D layerMap1;
+uniform sampler2D layerMap2;
+uniform sampler2D layerMap3;
+uniform vec2 layerRepeat0;
+uniform vec2 layerRepeat1;
+uniform vec2 layerRepeat2;
+uniform vec2 layerRepeat3;
+` + shader.fragmentShader;
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <map_fragment>`,
+            `#include <map_fragment>
+{
+    vec4 splat = texture2D(splatMap, vSplatUv);
+    diffuseColor = mix(diffuseColor, texture2D(layerMap0, vSplatUv * layerRepeat0), splat.r);
+    diffuseColor = mix(diffuseColor, texture2D(layerMap1, vSplatUv * layerRepeat1), splat.g);
+    diffuseColor = mix(diffuseColor, texture2D(layerMap2, vSplatUv * layerRepeat2), splat.b);
+    diffuseColor = mix(diffuseColor, texture2D(layerMap3, vSplatUv * layerRepeat3), splat.a);
+}`
+        );
+    };
+
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.name = 'terrain';
@@ -128,7 +216,9 @@ export function getTerrainY(terrain: Terrain, wx: number, wz: number): number {
 export function rebuildTerrain(ctx: RendererContext, terrain: Terrain): void {
     ctx.scene.remove(ctx.terrainMesh);
     ctx.terrainMesh.geometry.dispose();
-    ctx.terrainMesh = buildTerrainMesh(terrain);
+    ctx.terrainSplatMap.dispose();
+    ctx.terrainSplatMap = createSplatMap(terrain);
+    ctx.terrainMesh = buildTerrainMesh(terrain, ctx.terrainSplatMap);
     ctx.scene.add(ctx.terrainMesh);
 }
 
@@ -290,6 +380,7 @@ export interface RendererContext {
     camera: THREE.PerspectiveCamera;
     renderer: THREE.WebGLRenderer;
     terrainMesh: THREE.Mesh;
+    terrainSplatMap: THREE.DataTexture;
     objectGroups: Map<string, THREE.Group>;
     ambientLight: THREE.AmbientLight;
     sunLight: THREE.DirectionalLight;
@@ -324,7 +415,8 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     applySky(scene, gameMap.sky);
     applyLight(ambientLight, sunLight, renderer, gameMap.light);
 
-    const terrainMesh = buildTerrainMesh(gameMap.terrain);
+    const terrainSplatMap = createSplatMap(gameMap.terrain);
+    const terrainMesh = buildTerrainMesh(gameMap.terrain, terrainSplatMap);
     scene.add(terrainMesh);
 
     const objectGroups = new Map<string, THREE.Group>();
@@ -343,7 +435,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     });
     resizeObserver.observe(container);
 
-    return { scene, camera, renderer, terrainMesh, objectGroups, ambientLight, sunLight };
+    return { scene, camera, renderer, terrainMesh, terrainSplatMap, objectGroups, ambientLight, sunLight };
 }
 
 export function renderFrame(ctx: RendererContext): void {

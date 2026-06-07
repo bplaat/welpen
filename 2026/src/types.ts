@@ -78,12 +78,20 @@ export interface ObjectInstance {
     scale: [number, number, number];
 }
 
+export interface TerrainLayer {
+    name: string;
+    texture: string;
+    repeat: number;
+}
+
 export interface Terrain {
     width: number;
     depth: number;
     cellSize: number;
     heights: number[];
     texture: string;
+    layers: TerrainLayer[];
+    layerWeights: number[][];
 }
 
 export interface Sky {
