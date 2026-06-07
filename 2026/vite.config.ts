@@ -5,7 +5,7 @@
  */
 
 import { createReadStream, existsSync } from 'node:fs';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, cp } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
@@ -87,13 +87,25 @@ function writeFilePlugin(): Plugin {
     };
 }
 
+function copyMapDataPlugin(): Plugin {
+    return {
+        name: 'copy-map-data',
+        async closeBundle() {
+            const src = join(process.cwd(), 'data/map');
+            const dest = join(process.cwd(), 'target/dist/data/map');
+            await cp(src, dest, { recursive: true });
+        },
+    };
+}
+
 export default defineConfig({
     base: '/2026/',
     build: {
         outDir: 'target/dist',
         rollupOptions: {
-            input: { game: 'index.html', editor: 'editor.html' },
+            // Only bundle the game for production; editor only runs in dev server
+            input: { game: 'index.html' },
         },
     },
-    plugins: [serveDataPlugin(), writeFilePlugin()],
+    plugins: [serveDataPlugin(), writeFilePlugin(), copyMapDataPlugin()],
 });
