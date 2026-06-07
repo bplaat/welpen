@@ -10,7 +10,7 @@ import type { CharacterController } from './character.ts';
 import type { Terrain } from './types.ts';
 
 const WALK_SPEED = 6;
-const RUN_SPEED = 9;
+const RUN_SPEED = 10;
 const MOUSE_SENSITIVITY = 0.002;
 const PITCH_MIN = -0.4;
 const PITCH_MAX = 0.8;

@@ -14,6 +14,7 @@ import {
     rebuildObjectGroup,
     rebuildTerrain,
     getTerrainY,
+    isAutoRotatedDef,
     createRenderer,
     renderFrame,
     updateRegionOverlay,
@@ -55,7 +56,7 @@ let defsTransformHelper: THREE.Object3D;
 let defsGroup: THREE.Group;
 
 type Tab = 'world' | 'defs';
-type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region';
+type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region' | 'scatter';
 type TransformMode = 'translate' | 'rotate' | 'scale';
 
 let activeTab: Tab = 'world';
@@ -81,6 +82,13 @@ let defsSelCompIdx = -1;
 
 // Placement ghost (follows cursor in place mode)
 let ghostGroup: THREE.Group | null = null;
+
+// WASD camera movement
+const keysDown = new Set<string>();
+
+// Scatter tool
+let scatterAccum = 0;
+let scatterIdSeq = 0;
 
 // ---- DOM helpers ----
 
@@ -505,13 +513,13 @@ function listItem(icon: string, label: string, selected: boolean, onClick: () =>
 }
 
 function renderMapLeftPanel(body: HTMLElement): void {
-    if (currentTool === 'place') {
+    if (currentTool === 'place' || currentTool === 'scatter') {
         body.appendChild(el('div', 'list-section', 'Choose definition to place:'));
         for (const def of map.objectDefs) {
             body.appendChild(
                 listItem('\uD83D\uDCE6', def.name, placeDefId === def.id, () => {
                     placeDefId = def.id;
-                    setGhostDef(placeDefId);
+                    if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
                 })
             );
@@ -1321,12 +1329,13 @@ function openLayerDialog(layerIdx: number): void {
 
 function setTool(tool: MapTool): void {
     currentTool = tool;
-    (['select', 'place', 'raise', 'lower', 'level', 'paint'] as const).forEach((t) => {
+    (['select', 'place', 'raise', 'lower', 'level', 'paint', 'scatter'] as const).forEach((t) => {
         $(`btn-${t}`).classList.toggle('active', t === tool);
     });
     const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint' || tool === 'region';
-    $('brush-controls').classList.toggle('visible', isTerrain);
-    terrainEditor.showBrush(isTerrain);
+    const showBrush = isTerrain || tool === 'scatter';
+    $('brush-controls').classList.toggle('visible', showBrush);
+    terrainEditor.showBrush(showBrush);
     contourMesh.visible = tool === 'raise' || tool === 'lower' || tool === 'level';
     regionOverlayMesh.visible = tool === 'region';
     if (tool !== 'select') {
@@ -1341,12 +1350,13 @@ function setTool(tool: MapTool): void {
             mapSel = null;
         }
     }
-    if (tool === 'place') {
+    if (tool === 'place' || tool === 'scatter') {
         placeDefId = map.objectDefs[0]?.id ?? null;
-        setGhostDef(placeDefId);
+        setGhostDef(tool === 'place' ? placeDefId : null);
     } else {
         setGhostDef(null);
     }
+    if (tool !== 'scatter') scatterAccum = 0;
     renderLeftPanel();
     renderRightPanel();
 }
@@ -1450,13 +1460,16 @@ function setupViewportEvents(): void {
             if (e.button !== 0 && e.button !== 2) return;
             orbitControls.enabled = false;
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+        } else if (currentTool === 'scatter') {
+            orbitControls.enabled = false;
+            brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
 
     document.addEventListener('mouseup', (e) => {
         if (e.button === 0) isMouseDown = false;
         if (e.button === 2) isRightMouseDown = false;
-        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
+        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter') {
             orbitControls.enabled = true;
         }
     });
@@ -1465,7 +1478,7 @@ function setupViewportEvents(): void {
         if (activeTab !== 'world') return;
         if (currentTool === 'place') {
             updateGhost(e);
-        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
+        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter') {
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
@@ -1487,6 +1500,7 @@ function setupToolbarEvents(): void {
     $('btn-lower').addEventListener('click', () => setTool('lower'));
     $('btn-level').addEventListener('click', () => setTool('level'));
     $('btn-paint').addEventListener('click', () => setTool('paint'));
+    $('btn-scatter').addEventListener('click', () => setTool('scatter'));
     $('btn-translate').addEventListener('click', () => setTransformMode('translate'));
     $('btn-rotate').addEventListener('click', () => setTransformMode('rotate'));
     $('btn-scale').addEventListener('click', () => setTransformMode('scale'));
@@ -1617,7 +1631,7 @@ function setupToolbarEvents(): void {
     $('tab-world').addEventListener('click', () => switchTab('world'));
     $('tab-defs').addEventListener('click', () => switchTab('defs'));
 
-    $('btn-save').addEventListener('click', () => {
+    function triggerSave(): void {
         saveMap(map)
             .then(() => {
                 const btn = $('btn-save');
@@ -1627,20 +1641,20 @@ function setupToolbarEvents(): void {
                 }, 1500);
             })
             .catch((e: unknown) => alert(`Save failed: ${String(e)}`));
-    });
+    }
+
+    $('btn-save').addEventListener('click', triggerSave);
 
     document.addEventListener('keydown', (e) => {
         if ((e.target as HTMLElement).tagName === 'INPUT') return;
-        if (activeTab === 'world') {
-            if (e.code === 'KeyV') setTool('select');
-            if (e.code === 'KeyP') setTool('place');
-            if (e.code === 'KeyR') setTool('raise');
-            if (e.code === 'KeyL') setTool('lower');
-            if (e.code === 'KeyF') setTool('level');
-            if (e.code === 'KeyN') setTool('paint');
-            if (e.code === 'KeyG') setTransformMode('translate');
-            if (e.code === 'KeyE') setTransformMode('rotate');
-            if (e.code === 'KeyS') setTransformMode('scale');
+        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
+            e.preventDefault();
+            triggerSave();
+            return;
+        }
+        keysDown.add(e.code);
+        e.preventDefault();
+        if (activeTab === 'world' && !e.repeat) {
             if (e.code === 'Delete' && mapSel && mapSel !== 'settings') {
                 const group = ctx.objectGroups.get(mapSel);
                 if (group) {
@@ -1700,6 +1714,10 @@ async function main(): Promise<void> {
                 tz: orbitControls.target.z,
             })
         );
+    });
+
+    document.addEventListener('keyup', (e) => {
+        keysDown.delete(e.code);
     });
 
     transformControls = new TransformControls(ctx.camera, ctx.renderer.domElement);
@@ -1853,6 +1871,21 @@ async function main(): Promise<void> {
         lastTime = now;
 
         if (activeTab === 'world') {
+            const moveSpeed = 120 * delta;
+            if (keysDown.has('KeyW') || keysDown.has('KeyA') || keysDown.has('KeyS') || keysDown.has('KeyD')) {
+                const forward = new THREE.Vector3();
+                ctx.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                const right = new THREE.Vector3().crossVectors(forward, THREE.Object3D.DEFAULT_UP).normalize();
+                const move = new THREE.Vector3();
+                if (keysDown.has('KeyW')) move.addScaledVector(forward, moveSpeed);
+                if (keysDown.has('KeyS')) move.addScaledVector(forward, -moveSpeed);
+                if (keysDown.has('KeyA')) move.addScaledVector(right, -moveSpeed);
+                if (keysDown.has('KeyD')) move.addScaledVector(right, moveSpeed);
+                ctx.camera.position.add(move);
+                orbitControls.target.add(move);
+            }
             orbitControls.update();
             if (isMouseDown && (currentTool === 'raise' || currentTool === 'lower') && brushHit) {
                 terrainEditor.applyBrush(
@@ -1874,6 +1907,50 @@ async function main(): Promise<void> {
                 const paintIdx = isRightMouseDown ? -1 : regionSelIndex;
                 terrainEditor.applyRegionBrush(brushHit, paintIdx, brushSize);
                 updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
+            }
+            if (isMouseDown && currentTool === 'scatter' && brushHit && placeDefId) {
+                const def = map.objectDefs.find((d) => d.id === placeDefId);
+                if (def) {
+                    scatterAccum += delta * brushSize * 0.5;
+                    while (scatterAccum >= 1) {
+                        scatterAccum -= 1;
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = Math.sqrt(Math.random()) * brushSize;
+                        const x = brushHit.x + Math.cos(angle) * dist;
+                        const z = brushHit.z + Math.sin(angle) * dist;
+                        const y = getTerrainY(map.terrain, x, z);
+                        const rotY = isAutoRotatedDef(def) ? 0 : Math.random() * Math.PI * 2;
+                        const instance: ObjectInstance = {
+                            id: `obj_${Date.now()}_${scatterIdSeq++}`,
+                            defId: placeDefId,
+                            position: [Math.round(x * 10) / 10, y, Math.round(z * 10) / 10],
+                            rotation: [0, rotY, 0],
+                            scale: [1, 1, 1],
+                        };
+                        map.objects.push(instance);
+                        const group = buildObjectGroup(def, instance);
+                        ctx.scene.add(group);
+                        ctx.objectGroups.set(instance.id, group);
+                    }
+                }
+            }
+            if (isRightMouseDown && currentTool === 'scatter' && brushHit) {
+                const hit = brushHit;
+                const r2 = brushSize * brushSize;
+                const toRemove = map.objects.filter((o) => {
+                    const dx = o.position[0] - hit.x;
+                    const dz = o.position[2] - hit.z;
+                    return dx * dx + dz * dz <= r2;
+                });
+                for (const o of toRemove) {
+                    const group = ctx.objectGroups.get(o.id);
+                    if (group) ctx.scene.remove(group);
+                    ctx.objectGroups.delete(o.id);
+                }
+                if (toRemove.length > 0) {
+                    const removeIds = new Set(toRemove.map((o) => o.id));
+                    map.objects = map.objects.filter((o) => !removeIds.has(o.id));
+                }
             }
             renderFrame(ctx);
         } else {

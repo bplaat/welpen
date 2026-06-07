@@ -124,7 +124,7 @@ export function applySky(scene: THREE.Scene, sky: Sky): void {
     } else {
         scene.background = color;
     }
-    scene.fog = new THREE.FogExp2(color.getHex(), 0.004);
+    scene.fog = new THREE.FogExp2(color.getHex(), 0.001);
 }
 
 // --- Light ---
@@ -392,12 +392,18 @@ function buildComponentMesh(
     }
 }
 
+export function isAutoRotatedDef(def: ObjectDef): boolean {
+    return def.components.length > 0 && def.components.every((c) => c.type === 'billboard' || c.type === 'sprite');
+}
+
 export function buildObjectGroup(def: ObjectDef, instance: ObjectInstance): THREE.Group {
     const group = new THREE.Group();
     group.name = instance.id;
     group.userData = { instanceId: instance.id };
     group.position.set(instance.position[0], instance.position[1], instance.position[2]);
-    group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
+    if (!isAutoRotatedDef(def)) {
+        group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
+    }
     group.scale.set(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1);
     for (const comp of def.components) {
         group.add(buildComponentMesh(comp));
@@ -408,7 +414,9 @@ export function buildObjectGroup(def: ObjectDef, instance: ObjectInstance): THRE
 export function rebuildObjectGroup(group: THREE.Group, def: ObjectDef, instance: ObjectInstance): void {
     while (group.children.length > 0) group.remove(group.children[0]!);
     group.position.set(instance.position[0], instance.position[1], instance.position[2]);
-    group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
+    if (!isAutoRotatedDef(def)) {
+        group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
+    }
     group.scale.set(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1);
     for (const comp of def.components) {
         group.add(buildComponentMesh(comp));
@@ -445,7 +453,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     sunLight.shadow.camera.bottom = -100;
     scene.add(sunLight);
 
-    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 800);
+    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 3200);
     camera.position.set(0, 10, 20);
 
     // Create renderer first so applyLight/applySky can reference it
