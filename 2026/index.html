@@ -29,36 +29,6 @@
                 height: 100% !important;
             }
 
-            #crosshair {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 20px;
-                height: 20px;
-                pointer-events: none;
-            }
-            #crosshair::before,
-            #crosshair::after {
-                content: '';
-                position: absolute;
-                background: rgba(255, 255, 255, 0.8);
-            }
-            #crosshair::before {
-                top: 50%;
-                left: 0;
-                width: 100%;
-                height: 2px;
-                transform: translateY(-50%);
-            }
-            #crosshair::after {
-                left: 50%;
-                top: 0;
-                height: 100%;
-                width: 2px;
-                transform: translateX(-50%);
-            }
-
             #instructions {
                 position: fixed;
                 bottom: 16px;
@@ -80,9 +50,8 @@
         </style>
     </head>
     <body>
-        <div id="crosshair"></div>
         <div id="instructions">
-            Click to capture mouse &bull; WASD move &bull; Mouse look &bull; Shift sprint &bull; Esc release
+            Click to capture mouse &bull; WASD move &bull; Mouse look &bull; Shift sprint &bull; Space jump &bull; Esc release
         </div>
         <script type="module" src="./src/main.ts"></script>
     </body>

@@ -6,16 +6,16 @@
 
 import Stats from 'stats.js';
 import { createRenderer, renderFrame } from './renderer.ts';
-import { FPSControls } from './controls.ts';
+import { ThirdPersonControls } from './controls.ts';
 import { loadMap } from './map.ts';
+import { loadCharacter } from './character.ts';
 
 async function main(): Promise<void> {
-    const map = await loadMap();
+    const [map, character] = await Promise.all([loadMap(), loadCharacter()]);
     const ctx = createRenderer(document.body, map);
-    // Default start position; FPSControls will restore from localStorage or snap to terrain
-    ctx.camera.position.set(0, 3, 20);
+    ctx.scene.add(character.group);
 
-    const controls = new FPSControls(ctx.camera, ctx.renderer.domElement, ctx.terrainMesh);
+    const controls = new ThirdPersonControls(ctx.camera, ctx.renderer.domElement, map.terrain, character);
 
     const stats = new Stats();
     stats.showPanel(0);

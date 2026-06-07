@@ -15,6 +15,7 @@ const MIME: Record<string, string> = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
+    '.fbx': 'application/octet-stream',
 };
 
 function serveDataPlugin(): Plugin {
@@ -87,13 +88,17 @@ function writeFilePlugin(): Plugin {
     };
 }
 
-function copyMapDataPlugin(): Plugin {
+function copyDataPlugin(): Plugin {
     return {
-        name: 'copy-map-data',
+        name: 'copy-data',
         async closeBundle() {
-            const src = join(process.cwd(), 'data/map');
-            const dest = join(process.cwd(), 'target/dist/data/map');
-            await cp(src, dest, { recursive: true });
+            const src1 = join(process.cwd(), 'data/characters');
+            const dest1 = join(process.cwd(), 'target/dist/data/characters');
+            await cp(src1, dest1, { recursive: true });
+
+            const src2 = join(process.cwd(), 'data/map');
+            const dest2 = join(process.cwd(), 'target/dist/data/map');
+            await cp(src2, dest2, { recursive: true });
         },
     };
 }
@@ -107,5 +112,5 @@ export default defineConfig({
             input: { game: 'index.html' },
         },
     },
-    plugins: [serveDataPlugin(), writeFilePlugin(), copyMapDataPlugin()],
+    plugins: [serveDataPlugin(), writeFilePlugin(), copyDataPlugin()],
 });
