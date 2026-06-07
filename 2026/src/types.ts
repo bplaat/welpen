@@ -84,6 +84,11 @@ export interface TerrainLayer {
     repeat: number;
 }
 
+export interface Region {
+    id: string;
+    name: string;
+}
+
 export interface Terrain {
     width: number;
     depth: number;
@@ -92,6 +97,7 @@ export interface Terrain {
     texture: string;
     layers: TerrainLayer[];
     layerWeights: number[][];
+    regionMap: number[];
 }
 
 export interface Sky {
@@ -114,5 +120,6 @@ export interface GameMap {
     light: Light;
     terrain: Terrain;
     objectDefs: ObjectDef[];
+    regions: Region[];
     objects: ObjectInstance[];
 }

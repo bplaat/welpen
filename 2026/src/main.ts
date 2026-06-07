@@ -14,6 +14,8 @@ async function main(): Promise<void> {
     const [map, character] = await Promise.all([loadMap(), loadCharacter()]);
     map.terrain.layers ??= [];
     map.terrain.layerWeights ??= [];
+    map.regions ??= [];
+    map.terrain.regionMap ??= new Array(map.terrain.width * map.terrain.depth).fill(-1) as number[];
     const ctx = createRenderer(document.body, map);
     ctx.scene.add(character.group);
 
@@ -32,6 +34,10 @@ async function main(): Promise<void> {
     const instructions = document.getElementById('instructions');
     let instructionsHidden = false;
 
+    let currentRegionIdx = -1;
+    let regionHideTimeoutId = 0;
+    const regionEl = document.getElementById('region-name')!;
+
     let lastTime = performance.now();
     function frame(): void {
         stats.begin();
@@ -44,6 +50,26 @@ async function main(): Promise<void> {
             instructionsHidden = true;
             instructions?.classList.add('hidden');
         }
+
+        const pos = character.group.position;
+        const { width, depth, cellSize, regionMap } = map.terrain;
+        const halfW = ((width - 1) * cellSize) / 2;
+        const halfD = ((depth - 1) * cellSize) / 2;
+        const gx = Math.max(0, Math.min(width - 1, Math.round((pos.x + halfW) / cellSize)));
+        const gz = Math.max(0, Math.min(depth - 1, Math.round((pos.z + halfD) / cellSize)));
+        const newRegionIdx = regionMap[gz * width + gx] ?? -1;
+        if (newRegionIdx !== currentRegionIdx) {
+            currentRegionIdx = newRegionIdx;
+            clearTimeout(regionHideTimeoutId);
+            if (newRegionIdx >= 0 && newRegionIdx < map.regions.length) {
+                regionEl.textContent = map.regions[newRegionIdx]!.name;
+                regionEl.style.opacity = '1';
+                regionHideTimeoutId = window.setTimeout(() => { regionEl.style.opacity = '0'; }, 3000);
+            } else {
+                regionEl.style.opacity = '0';
+            }
+        }
+
         renderFrame(ctx);
         stats.end();
     }

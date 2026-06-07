@@ -47,12 +47,30 @@
             #instructions.hidden {
                 opacity: 0;
             }
+
+            #region-name {
+                position: fixed;
+                top: 8%;
+                left: 50%;
+                transform: translateX(-50%);
+                color: #fff;
+                font-family: system-ui, sans-serif;
+                font-size: 26px;
+                font-weight: 600;
+                text-align: center;
+                opacity: 0;
+                transition: opacity 0.6s ease;
+                pointer-events: none;
+                text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.5);
+                letter-spacing: 0.05em;
+            }
         </style>
     </head>
     <body>
         <div id="instructions">
             Click to capture mouse &bull; WASD move &bull; Mouse look &bull; Shift sprint &bull; Space jump &bull; Esc release
         </div>
+        <div id="region-name"></div>
         <script type="module" src="./src/main.ts"></script>
     </body>
 </html>

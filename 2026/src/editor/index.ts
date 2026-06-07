@@ -16,6 +16,7 @@ import {
     getTerrainY,
     createRenderer,
     renderFrame,
+    updateRegionOverlay,
 } from '../renderer.ts';
 import { loadMap, saveMap, uploadTexture } from '../map.ts';
 import type {
@@ -26,6 +27,7 @@ import type {
     ObjectDef,
     ObjectInstance,
     PlaneComponent,
+    Region,
     SphereComponent,
     SpriteComponent,
 } from '../types.ts';
@@ -53,7 +55,7 @@ let defsTransformHelper: THREE.Object3D;
 let defsGroup: THREE.Group;
 
 type Tab = 'world' | 'defs';
-type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint';
+type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region';
 type TransformMode = 'translate' | 'rotate' | 'scale';
 
 let activeTab: Tab = 'world';
@@ -69,6 +71,8 @@ let brushHit: THREE.Vector3 | null = null;
 let isMouseDown = false;
 let isRightMouseDown = false;
 let paintLayerIndex = 0;
+let regionSelIndex = 0;
+let regionOverlayMesh: THREE.Mesh;
 let levelTargetHeight = 0;
 
 // Defs editor selection
@@ -517,6 +521,25 @@ function renderMapLeftPanel(body: HTMLElement): void {
 
     body.appendChild(listItem('\uD83C\uDF0D', 'Map Settings', mapSel === 'settings', () => selectMapItem('settings')));
 
+    body.appendChild(el('div', 'list-section', 'Regions'));
+    for (let i = 0; i < map.regions.length; i++) {
+        const region = map.regions[i]!;
+        const idx = i;
+        body.appendChild(
+            listItem('\uD83D\uDDFA', region.name, currentTool === 'region' && regionSelIndex === idx, () => {
+                regionSelIndex = idx;
+                setTool('region');
+            })
+        );
+    }
+    const addRegionBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Region');
+    addRegionBtn.addEventListener('click', () => {
+        map.regions.push({ id: `region_${Date.now()}`, name: 'New Region' });
+        regionSelIndex = map.regions.length - 1;
+        setTool('region');
+    });
+    body.appendChild(addRegionBtn);
+
     if (map.objects.length > 0) {
         body.appendChild(el('div', 'list-section', 'Placed Objects'));
         for (const inst of map.objects) {
@@ -669,6 +692,10 @@ function renderRightPanel(): void {
 }
 
 function renderMapRightPanel(body: HTMLElement): void {
+    if (currentTool === 'region') {
+        renderRegionPanel(body);
+        return;
+    }
     if (!mapSel) {
         body.appendChild(el('div', 'empty-msg', 'Select an entity or Map Settings'));
         return;
@@ -679,6 +706,37 @@ function renderMapRightPanel(body: HTMLElement): void {
         const instance = map.objects.find((o) => o.id === mapSel);
         if (instance) renderInstancePanel(body, instance);
     }
+}
+
+function renderRegionPanel(body: HTMLElement): void {
+    const region = map.regions[regionSelIndex] as Region | undefined;
+    if (!region) {
+        body.appendChild(el('div', 'empty-msg', 'Select or add a region'));
+        return;
+    }
+    body.appendChild(makeSection('Region'));
+    body.appendChild(
+        makeField('Name', textInput(region.name, (v) => {
+            region.name = v;
+            renderLeftPanel();
+        }))
+    );
+    body.appendChild(
+        actionBtn('Delete Region', 'danger', () => {
+            const ri = regionSelIndex;
+            for (let i = 0; i < map.terrain.regionMap.length; i++) {
+                const v = map.terrain.regionMap[i]!;
+                if (v === ri) map.terrain.regionMap[i] = -1;
+                else if (v > ri) map.terrain.regionMap[i] = v - 1;
+            }
+            map.regions.splice(ri, 1);
+            regionSelIndex = Math.max(0, map.regions.length - 1);
+            updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
+            if (map.regions.length === 0) setTool('select');
+            else renderLeftPanel();
+            renderRightPanel();
+        })
+    );
 }
 
 function renderMapSettings(body: HTMLElement): void {
@@ -730,6 +788,7 @@ function renderMapSettings(body: HTMLElement): void {
             rebuildTerrain(ctx, map.terrain);
             terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
+            regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
         })
     );
 
@@ -767,6 +826,7 @@ function renderMapSettings(body: HTMLElement): void {
             rebuildTerrain(ctx, map.terrain);
             terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
+            regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
             renderRightPanel();
         });
         item.appendChild(label);
@@ -812,6 +872,15 @@ function renderMapSettings(body: HTMLElement): void {
                 }
                 return newWeights;
             });
+            const newRM = new Array(newW * newD).fill(-1) as number[];
+            for (let z = 0; z < oldD; z++) {
+                for (let x = 0; x < oldW; x++) {
+                    const nx = x + offsetX; const nz = z + offsetZ;
+                    if (nx >= 0 && nx < newW && nz >= 0 && nz < newD)
+                        newRM[nz * newW + nx] = map.terrain.regionMap[z * oldW + x] ?? -1;
+                }
+            }
+            map.terrain.regionMap = newRM;
             map.terrain.width = newW;
             map.terrain.depth = newD;
             map.terrain.cellSize = newCS;
@@ -819,6 +888,8 @@ function renderMapSettings(body: HTMLElement): void {
             rebuildTerrain(ctx, map.terrain);
             terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
+            updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
+            regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
         })
     );
 
@@ -1212,6 +1283,7 @@ function openLayerDialog(layerIdx: number): void {
         rebuildTerrain(ctx, map.terrain);
         terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
         contourMesh.geometry = ctx.terrainMesh.geometry;
+        regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
         if (!isEdit) setTool('paint');
         dialog.close();
         renderRightPanel();
@@ -1252,16 +1324,19 @@ function setTool(tool: MapTool): void {
     (['select', 'place', 'raise', 'lower', 'level', 'paint'] as const).forEach((t) => {
         $(`btn-${t}`).classList.toggle('active', t === tool);
     });
-    const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint';
+    const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint' || tool === 'region';
     $('brush-controls').classList.toggle('visible', isTerrain);
     terrainEditor.showBrush(isTerrain);
     contourMesh.visible = tool === 'raise' || tool === 'lower' || tool === 'level';
+    regionOverlayMesh.visible = tool === 'region';
     if (tool !== 'select') {
         transformControls.detach();
         selectionBox.visible = false;
         // Terrain tools keep settings open so the layer list stays visible
-        if (isTerrain) {
+        if (isTerrain && tool !== 'region') {
             mapSel = 'settings';
+        } else if (tool === 'region') {
+            mapSel = null;
         } else {
             mapSel = null;
         }
@@ -1371,13 +1446,17 @@ function setupViewportEvents(): void {
         } else if (currentTool === 'paint') {
             orbitControls.enabled = false;
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+        } else if (currentTool === 'region') {
+            if (e.button !== 0 && e.button !== 2) return;
+            orbitControls.enabled = false;
+            brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
 
     document.addEventListener('mouseup', (e) => {
         if (e.button === 0) isMouseDown = false;
         if (e.button === 2) isRightMouseDown = false;
-        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint') {
+        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
             orbitControls.enabled = true;
         }
     });
@@ -1386,7 +1465,7 @@ function setupViewportEvents(): void {
         if (activeTab !== 'world') return;
         if (currentTool === 'place') {
             updateGhost(e);
-        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint') {
+        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         }
     });
@@ -1581,6 +1660,8 @@ async function main(): Promise<void> {
     map = await loadMap();
     map.terrain.layers ??= [];
     map.terrain.layerWeights ??= [];
+    map.regions ??= [];
+    map.terrain.regionMap ??= new Array(map.terrain.width * map.terrain.depth).fill(-1) as number[];
 
     const viewport = $('viewport');
     ctx = createRenderer(viewport, map);
@@ -1638,6 +1719,45 @@ async function main(): Promise<void> {
     ctx.scene.add(selectionBox);
 
     terrainEditor = new TerrainEditor(map.terrain, ctx.terrainMesh, ctx.terrainSplatMap, ctx.scene);
+
+    const regionSplatScale = new THREE.Vector2(
+        1 / ((map.terrain.width - 1) * map.terrain.cellSize),
+        1 / ((map.terrain.depth - 1) * map.terrain.cellSize)
+    );
+    regionOverlayMesh = new THREE.Mesh(
+        ctx.terrainMesh.geometry,
+        new THREE.ShaderMaterial({
+            transparent: true,
+            depthTest: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -3,
+            polygonOffsetUnits: -3,
+            uniforms: {
+                regionTex: { value: ctx.regionOverlayTex },
+                splatScale: { value: regionSplatScale },
+            },
+            vertexShader: `
+                uniform vec2 splatScale;
+                varying vec2 vRegionUv;
+                void main() {
+                    vRegionUv = position.xz * splatScale + 0.5;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D regionTex;
+                varying vec2 vRegionUv;
+                void main() {
+                    vec4 col = texture2D(regionTex, vRegionUv);
+                    if (col.a < 0.01) discard;
+                    gl_FragColor = col;
+                }
+            `,
+        })
+    );
+    regionOverlayMesh.visible = false;
+    ctx.scene.add(regionOverlayMesh);
 
     // Contour line overlay — shown only during raise/lower terrain editing
     contourMesh = new THREE.Mesh(
@@ -1749,6 +1869,11 @@ async function main(): Promise<void> {
             }
             if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
                 terrainEditor.applyPaintBrush(brushHit, paintLayerIndex, brushSize, delta, isRightMouseDown);
+            }
+            if ((isMouseDown || isRightMouseDown) && currentTool === 'region' && brushHit) {
+                const paintIdx = isRightMouseDown ? -1 : regionSelIndex;
+                terrainEditor.applyRegionBrush(brushHit, paintIdx, brushSize);
+                updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
             }
             renderFrame(ctx);
         } else {

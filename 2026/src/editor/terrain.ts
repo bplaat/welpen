@@ -151,6 +151,21 @@ export class TerrainEditor {
         }
     }
 
+    applyRegionBrush(hitPoint: THREE.Vector3, regionIndex: number, brushSize: number): void {
+        const { width, depth, cellSize, regionMap } = this.terrain;
+        const halfW = ((width - 1) * cellSize) / 2;
+        const halfD = ((depth - 1) * cellSize) / 2;
+        for (let z = 0; z < depth; z++) {
+            for (let x = 0; x < width; x++) {
+                const wx = x * cellSize - halfW;
+                const wz = z * cellSize - halfD;
+                if (Math.sqrt((wx - hitPoint.x) ** 2 + (wz - hitPoint.z) ** 2) < brushSize) {
+                    regionMap[z * width + x] = regionIndex;
+                }
+            }
+        }
+    }
+
     applyPaintBrush(
         hitPoint: THREE.Vector3,
         layerIndex: number,

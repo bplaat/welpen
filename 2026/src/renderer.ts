@@ -14,6 +14,7 @@ import type {
     ObjectDef,
     ObjectInstance,
     PlaneComponent,
+    Region,
     SphereComponent,
     SpriteComponent,
     Sky,
@@ -49,6 +50,45 @@ export function updateTerrainSplatMap(splatMap: THREE.DataTexture, terrain: Terr
         data[i * 4 + 3] = Math.round((layerWeights[3]?.[i] ?? 0) * 255);
     }
     splatMap.needsUpdate = true;
+}
+
+// --- Region overlay ---
+
+const REGION_COLORS = [
+    [220, 80, 80],
+    [80, 200, 80],
+    [80, 130, 220],
+    [220, 200, 60],
+    [200, 80, 200],
+    [60, 200, 200],
+    [220, 140, 60],
+    [150, 80, 220],
+];
+
+export function createRegionOverlayTex(terrain: Terrain): THREE.DataTexture {
+    const { width, depth } = terrain;
+    const data = new Uint8Array(width * depth * 4);
+    const tex = new THREE.DataTexture(data, width, depth, THREE.RGBAFormat);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.flipY = false;
+    tex.needsUpdate = true;
+    return tex;
+}
+
+export function updateRegionOverlay(tex: THREE.DataTexture, terrain: Terrain, regions: Region[]): void {
+    const { width, depth, regionMap } = terrain;
+    const data = tex.image.data as Uint8Array;
+    for (let i = 0; i < width * depth; i++) {
+        const ri = regionMap[i] ?? -1;
+        if (ri < 0 || ri >= regions.length) {
+            data[i * 4 + 0] = 0; data[i * 4 + 1] = 0; data[i * 4 + 2] = 0; data[i * 4 + 3] = 0;
+        } else {
+            const c = REGION_COLORS[ri % REGION_COLORS.length]!;
+            data[i * 4 + 0] = c[0]!; data[i * 4 + 1] = c[1]!; data[i * 4 + 2] = c[2]!; data[i * 4 + 3] = 160;
+        }
+    }
+    tex.needsUpdate = true;
 }
 
 // --- Texture cache ---
@@ -220,6 +260,8 @@ export function rebuildTerrain(ctx: RendererContext, terrain: Terrain): void {
     ctx.terrainSplatMap = createSplatMap(terrain);
     ctx.terrainMesh = buildTerrainMesh(terrain, ctx.terrainSplatMap);
     ctx.scene.add(ctx.terrainMesh);
+    ctx.regionOverlayTex.dispose();
+    ctx.regionOverlayTex = createRegionOverlayTex(terrain);
 }
 
 // --- Object instances ---
@@ -381,6 +423,7 @@ export interface RendererContext {
     renderer: THREE.WebGLRenderer;
     terrainMesh: THREE.Mesh;
     terrainSplatMap: THREE.DataTexture;
+    regionOverlayTex: THREE.DataTexture;
     objectGroups: Map<string, THREE.Group>;
     ambientLight: THREE.AmbientLight;
     sunLight: THREE.DirectionalLight;
@@ -419,6 +462,9 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     const terrainMesh = buildTerrainMesh(gameMap.terrain, terrainSplatMap);
     scene.add(terrainMesh);
 
+    const regionOverlayTex = createRegionOverlayTex(gameMap.terrain);
+    updateRegionOverlay(regionOverlayTex, gameMap.terrain, gameMap.regions ?? []);
+
     const objectGroups = new Map<string, THREE.Group>();
     for (const instance of gameMap.objects) {
         const def = gameMap.objectDefs.find((d) => d.id === instance.defId);
@@ -435,7 +481,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     });
     resizeObserver.observe(container);
 
-    return { scene, camera, renderer, terrainMesh, terrainSplatMap, objectGroups, ambientLight, sunLight };
+    return { scene, camera, renderer, terrainMesh, terrainSplatMap, regionOverlayTex, objectGroups, ambientLight, sunLight };
 }
 
 export function renderFrame(ctx: RendererContext): void {
