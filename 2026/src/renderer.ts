@@ -83,10 +83,16 @@ export function updateRegionOverlay(tex: THREE.DataTexture, terrain: Terrain, re
     for (let i = 0; i < width * depth; i++) {
         const ri = regionMap[i] ?? -1;
         if (ri < 0 || ri >= regions.length) {
-            data[i * 4 + 0] = 0; data[i * 4 + 1] = 0; data[i * 4 + 2] = 0; data[i * 4 + 3] = 0;
+            data[i * 4 + 0] = 0;
+            data[i * 4 + 1] = 0;
+            data[i * 4 + 2] = 0;
+            data[i * 4 + 3] = 0;
         } else {
             const c = REGION_COLORS[ri % REGION_COLORS.length]!;
-            data[i * 4 + 0] = c[0]!; data[i * 4 + 1] = c[1]!; data[i * 4 + 2] = c[2]!; data[i * 4 + 3] = 160;
+            data[i * 4 + 0] = c[0]!;
+            data[i * 4 + 1] = c[1]!;
+            data[i * 4 + 2] = c[2]!;
+            data[i * 4 + 3] = 160;
         }
     }
     tex.needsUpdate = true;
@@ -423,13 +429,19 @@ function compLocalMatrix(comp: Component): THREE.Matrix4 {
         rot = new THREE.Quaternion();
         scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
     } else if (comp.type === 'sphere') {
-        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        rot = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+        );
         scl = new THREE.Vector3(comp.size[0], comp.size[0], comp.size[0]);
     } else if (comp.type === 'plane') {
-        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        rot = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+        );
         scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
     } else {
-        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        rot = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+        );
         scl = new THREE.Vector3(comp.size[0], comp.size[1], comp.size[2]);
     }
     return new THREE.Matrix4().compose(pos, rot, scl);
@@ -440,19 +452,40 @@ function buildInstancedMeshForComp(comp: Component, capacity: number, defId: str
     let mat: THREE.Material;
     if (comp.type === 'cube') {
         geo = new THREE.BoxGeometry(1, 1, 1);
-        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+        mat = new THREE.MeshLambertMaterial({
+            map: loadTexture(comp.texture),
+            transparent: comp.transparent,
+            alphaTest: comp.transparent ? 0.5 : 0,
+        });
     } else if (comp.type === 'plane') {
         geo = new THREE.PlaneGeometry(1, 1);
-        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0, side: THREE.DoubleSide });
+        mat = new THREE.MeshLambertMaterial({
+            map: loadTexture(comp.texture),
+            transparent: comp.transparent,
+            alphaTest: comp.transparent ? 0.5 : 0,
+            side: THREE.DoubleSide,
+        });
     } else if (comp.type === 'cylinder') {
         geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
-        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+        mat = new THREE.MeshLambertMaterial({
+            map: loadTexture(comp.texture),
+            transparent: comp.transparent,
+            alphaTest: comp.transparent ? 0.5 : 0,
+        });
     } else if (comp.type === 'sphere') {
         geo = new THREE.SphereGeometry(0.5, 16, 12);
-        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+        mat = new THREE.MeshLambertMaterial({
+            map: loadTexture(comp.texture),
+            transparent: comp.transparent,
+            alphaTest: comp.transparent ? 0.5 : 0,
+        });
     } else {
         geo = new THREE.PlaneGeometry(1, 1);
-        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+        mat = new THREE.MeshLambertMaterial({
+            map: loadTexture(comp.texture),
+            transparent: comp.transparent,
+            alphaTest: comp.transparent ? 0.5 : 0,
+        });
     }
     geo.applyMatrix4(compLocalMatrix(comp));
     const imesh = new THREE.InstancedMesh(geo, mat, capacity);
@@ -468,7 +501,9 @@ function buildInstancedMeshForComp(comp: Component, capacity: number, defId: str
 function makeInstanceMatrix(instance: ObjectInstance): THREE.Matrix4 {
     return new THREE.Matrix4().compose(
         new THREE.Vector3(instance.position[0], instance.position[1], instance.position[2]),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0)),
+        new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0)
+        ),
         new THREE.Vector3(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1)
     );
 }
@@ -481,7 +516,9 @@ function createInstancedDef(scene: THREE.Scene, def: ObjectDef, capacity: number
     });
     return {
         meshes,
-        compAutoRotate: def.components.map((c) => (c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none')),
+        compAutoRotate: def.components.map((c) =>
+            c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none'
+        ),
         slots: new Map(),
         reverseSlots: new Map(),
         freeSlots: [],
@@ -495,7 +532,10 @@ function growInstancedDef(scene: THREE.Scene, data: InstancedDefData, def: Objec
         const old = data.meshes[ci]!;
         const n = buildInstancedMeshForComp(def.components[ci]!, newCap, def.id);
         const tmp = new THREE.Matrix4();
-        for (let s = 0; s < data.capacity; s++) { old.getMatrixAt(s, tmp); n.setMatrixAt(s, tmp); }
+        for (let s = 0; s < data.capacity; s++) {
+            old.getMatrixAt(s, tmp);
+            n.setMatrixAt(s, tmp);
+        }
         n.count = old.count;
         n.instanceMatrix.needsUpdate = true;
         scene.remove(old);
@@ -523,7 +563,10 @@ export function addObjectInstance(ctx: RendererContext, def: ObjectDef, instance
     data.slots.set(instance.id, slot);
     data.reverseSlots.set(slot, instance.id);
     const mat = makeInstanceMatrix(instance);
-    for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.instanceMatrix.needsUpdate = true; }
+    for (const m of data.meshes) {
+        m.setMatrixAt(slot, mat);
+        m.instanceMatrix.needsUpdate = true;
+    }
     const group = buildObjectGroup(def, instance);
     group.visible = false;
     ctx.scene.add(group);
@@ -532,11 +575,17 @@ export function addObjectInstance(ctx: RendererContext, def: ObjectDef, instance
 
 export function removeObjectInstance(ctx: RendererContext, instanceId: string): void {
     const group = ctx.objectGroups.get(instanceId);
-    if (group) { ctx.scene.remove(group); ctx.objectGroups.delete(instanceId); }
+    if (group) {
+        ctx.scene.remove(group);
+        ctx.objectGroups.delete(instanceId);
+    }
     for (const [, data] of ctx.instancedDefs) {
         const slot = data.slots.get(instanceId);
         if (slot !== undefined) {
-            for (const m of data.meshes) { m.setMatrixAt(slot, _zeroScale); m.instanceMatrix.needsUpdate = true; }
+            for (const m of data.meshes) {
+                m.setMatrixAt(slot, _zeroScale);
+                m.instanceMatrix.needsUpdate = true;
+            }
             data.slots.delete(instanceId);
             data.reverseSlots.delete(slot);
             data.freeSlots.push(slot);
@@ -552,7 +601,10 @@ export function syncObjectToInstanced(ctx: RendererContext, instanceId: string):
     for (const [, data] of ctx.instancedDefs) {
         const slot = data.slots.get(instanceId);
         if (slot !== undefined) {
-            for (const m of data.meshes) { m.setMatrixAt(slot, _iMat); m.instanceMatrix.needsUpdate = true; }
+            for (const m of data.meshes) {
+                m.setMatrixAt(slot, _iMat);
+                m.instanceMatrix.needsUpdate = true;
+            }
             return;
         }
     }
@@ -566,7 +618,10 @@ export function setObjectSelected(ctx: RendererContext, instanceId: string, sele
         for (const [, data] of ctx.instancedDefs) {
             const slot = data.slots.get(instanceId);
             if (slot !== undefined) {
-                for (const m of data.meshes) { m.setMatrixAt(slot, _zeroScale); m.instanceMatrix.needsUpdate = true; }
+                for (const m of data.meshes) {
+                    m.setMatrixAt(slot, _zeroScale);
+                    m.instanceMatrix.needsUpdate = true;
+                }
                 return;
             }
         }
@@ -576,7 +631,10 @@ export function setObjectSelected(ctx: RendererContext, instanceId: string, sele
         for (const [, data] of ctx.instancedDefs) {
             const slot = data.slots.get(instanceId);
             if (slot !== undefined) {
-                for (const m of data.meshes) { m.setMatrixAt(slot, _iMat); m.instanceMatrix.needsUpdate = true; }
+                for (const m of data.meshes) {
+                    m.setMatrixAt(slot, _iMat);
+                    m.instanceMatrix.needsUpdate = true;
+                }
                 return;
             }
         }
@@ -586,7 +644,10 @@ export function setObjectSelected(ctx: RendererContext, instanceId: string, sele
 export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instances: ObjectInstance[]): void {
     const old = ctx.instancedDefs.get(def.id);
     if (old) {
-        for (const m of old.meshes) { ctx.scene.remove(m); m.geometry.dispose(); }
+        for (const m of old.meshes) {
+            ctx.scene.remove(m);
+            m.geometry.dispose();
+        }
         ctx.instancedDefs.delete(def.id);
     }
     if (instances.length === 0) return;
@@ -598,7 +659,10 @@ export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instan
         data.reverseSlots.set(slot, inst.id);
         const group = ctx.objectGroups.get(inst.id);
         const mat = group?.visible ? _zeroScale : makeInstanceMatrix(inst);
-        for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.count = Math.max(m.count, slot + 1); }
+        for (const m of data.meshes) {
+            m.setMatrixAt(slot, mat);
+            m.count = Math.max(m.count, slot + 1);
+        }
     }
     for (const m of data.meshes) m.instanceMatrix.needsUpdate = true;
 }
@@ -705,13 +769,27 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
         data.slots.set(instance.id, slot);
         data.reverseSlots.set(slot, instance.id);
         const mat = makeInstanceMatrix(instance);
-        for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.count = Math.max(m.count, slot + 1); }
+        for (const m of data.meshes) {
+            m.setMatrixAt(slot, mat);
+            m.count = Math.max(m.count, slot + 1);
+        }
     }
     for (const [, data] of instancedDefs) {
         for (const m of data.meshes) m.instanceMatrix.needsUpdate = true;
     }
 
-    return { scene, camera, renderer, terrainMesh, terrainSplatMap, regionOverlayTex, objectGroups, instancedDefs, ambientLight, sunLight };
+    return {
+        scene,
+        camera,
+        renderer,
+        terrainMesh,
+        terrainSplatMap,
+        regionOverlayTex,
+        objectGroups,
+        instancedDefs,
+        ambientLight,
+        sunLight,
+    };
 }
 
 export function renderFrame(ctx: RendererContext): void {

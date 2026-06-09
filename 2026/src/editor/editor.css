@@ -435,10 +435,14 @@ dialog::backdrop {
     border: 1px solid #3a883a;
     color: #aaffaa;
 }
-.dialog-btn.primary:hover { background: #2a5a2a; }
+.dialog-btn.primary:hover {
+    background: #2a5a2a;
+}
 .dialog-btn.secondary {
     background: #3a3a3a;
     border: 1px solid #555;
     color: #ccc;
 }
-.dialog-btn.secondary:hover { background: #4a4a4a; }
+.dialog-btn.secondary:hover {
+    background: #4a4a4a;
+}

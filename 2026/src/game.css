@@ -143,8 +143,12 @@ canvas {
 }
 
 @media (hover: none) {
-    #touch-controls { display: block; }
-    #instructions { display: none; }
+    #touch-controls {
+        display: block;
+    }
+    #instructions {
+        display: none;
+    }
 }
 
 /* Landscape prompt - shown on touch devices in portrait mode */
@@ -171,10 +175,18 @@ canvas {
 }
 
 @keyframes rotate-hint {
-    0%, 40% { transform: rotate(0deg); }
-    70%, 100% { transform: rotate(-90deg); }
+    0%,
+    40% {
+        transform: rotate(0deg);
+    }
+    70%,
+    100% {
+        transform: rotate(-90deg);
+    }
 }
 
 @media (orientation: portrait) and (hover: none) {
-    #landscape-prompt { display: flex; }
+    #landscape-prompt {
+        display: flex;
+    }
 }

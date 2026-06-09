@@ -114,10 +114,10 @@ export async function loadCharacter(): Promise<CharacterController> {
                 state === 'idle'
                     ? idleAction
                     : state === 'walk'
-                      ? walkAction
-                      : state === 'run'
-                        ? runAction
-                        : jumpAction;
+                    ? walkAction
+                    : state === 'run'
+                    ? runAction
+                    : jumpAction;
             // For jump: set timeScale so the clip reaches its end exactly at the arc peak
             const timeScale = state === 'jump' && jumpHalfTime ? jumpAction.getClip().duration / jumpHalfTime : 1;
             targetAction.reset().setEffectiveTimeScale(timeScale).setEffectiveWeight(1).play();

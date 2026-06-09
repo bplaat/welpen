@@ -60,7 +60,7 @@ export class ThirdPersonControls {
         camera: THREE.PerspectiveCamera,
         domElement: HTMLElement,
         terrain: Terrain,
-        character: CharacterController,
+        character: CharacterController
     ) {
         this.camera = camera;
         this.domElement = domElement;
@@ -71,7 +71,9 @@ export class ThirdPersonControls {
         this.facingYaw = this.yaw;
         this.targetFacingYaw = this.yaw;
         this.bindEvents();
-        this.character.onJumpFinished = () => { this.jumping = false; };
+        this.character.onJumpFinished = () => {
+            this.jumping = false;
+        };
         this.updateCamera();
     }
 
@@ -84,16 +86,21 @@ export class ThirdPersonControls {
             this.playerPos.z = s.z;
             this.yaw = s.yaw;
             this.pitch = s.pitch;
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
     }
 
     private saveToStorage(): void {
-        localStorage.setItem(LS_KEY, JSON.stringify({
-            x: this.playerPos.x,
-            z: this.playerPos.z,
-            yaw: this.yaw,
-            pitch: this.pitch,
-        }));
+        localStorage.setItem(
+            LS_KEY,
+            JSON.stringify({
+                x: this.playerPos.x,
+                z: this.playerPos.z,
+                yaw: this.yaw,
+                pitch: this.pitch,
+            })
+        );
     }
 
     private bindEvents(): void {
@@ -143,7 +150,9 @@ export class ThirdPersonControls {
 
     // --- Public touch API ---
 
-    activateTouch(): void { this.touchActive = true; }
+    activateTouch(): void {
+        this.touchActive = true;
+    }
 
     setTouchMove(x: number, y: number): void {
         this.touchMoveX = x;
@@ -159,7 +168,9 @@ export class ThirdPersonControls {
         if (this.grounded) this.doJump();
     }
 
-    isLocked(): boolean { return this.locked || this.touchActive; }
+    isLocked(): boolean {
+        return this.locked || this.touchActive;
+    }
 
     // ---
 

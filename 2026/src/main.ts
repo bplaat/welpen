@@ -30,9 +30,11 @@ async function main(): Promise<void> {
 
     const JOYSTICK_MAX = 44;
     let joystickId = -1;
-    let joystickCx = 0, joystickCy = 0;
+    let joystickCx = 0,
+        joystickCy = 0;
     let lookId = -1;
-    let lookPx = 0, lookPy = 0;
+    let lookPx = 0,
+        lookPy = 0;
 
     function resetJoystick(): void {
         joystickBase.style.left = '';
@@ -41,37 +43,47 @@ async function main(): Promise<void> {
         controls.setTouchMove(0, 0);
     }
 
-    joystickZone.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            const t = e.changedTouches[i]!;
-            if (joystickId !== -1) continue;
-            joystickId = t.identifier;
-            joystickCx = t.clientX;
-            joystickCy = t.clientY;
-            joystickBase.style.left = t.clientX + 'px';
-            joystickBase.style.top = t.clientY + 'px';
-            joystickBase.style.display = 'block';
-            controls.activateTouch();
-        }
-    }, { passive: false });
+    joystickZone.addEventListener(
+        'touchstart',
+        (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i]!;
+                if (joystickId !== -1) continue;
+                joystickId = t.identifier;
+                joystickCx = t.clientX;
+                joystickCy = t.clientY;
+                joystickBase.style.left = t.clientX + 'px';
+                joystickBase.style.top = t.clientY + 'px';
+                joystickBase.style.display = 'block';
+                controls.activateTouch();
+            }
+        },
+        { passive: false }
+    );
 
-    joystickZone.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            const t = e.changedTouches[i]!;
-            if (t.identifier !== joystickId) continue;
-            const dx = t.clientX - joystickCx;
-            const dy = t.clientY - joystickCy;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const clamped = Math.min(len, JOYSTICK_MAX);
-            const nx = len > 0 ? dx / len : 0;
-            const ny = len > 0 ? dy / len : 0;
-            joystickThumb.style.transform = `translate(calc(-50% + ${nx * clamped}px), calc(-50% + ${ny * clamped}px))`;
-            const mag = Math.min(len / JOYSTICK_MAX, 1);
-            controls.setTouchMove(nx * mag, -ny * mag);
-        }
-    }, { passive: false });
+    joystickZone.addEventListener(
+        'touchmove',
+        (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i]!;
+                if (t.identifier !== joystickId) continue;
+                const dx = t.clientX - joystickCx;
+                const dy = t.clientY - joystickCy;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const clamped = Math.min(len, JOYSTICK_MAX);
+                const nx = len > 0 ? dx / len : 0;
+                const ny = len > 0 ? dy / len : 0;
+                joystickThumb.style.transform = `translate(calc(-50% + ${nx * clamped}px), calc(-50% + ${
+                    ny * clamped
+                }px))`;
+                const mag = Math.min(len / JOYSTICK_MAX, 1);
+                controls.setTouchMove(nx * mag, -ny * mag);
+            }
+        },
+        { passive: false }
+    );
 
     function onJoystickEnd(e: TouchEvent): void {
         for (let i = 0; i < e.changedTouches.length; i++) {
@@ -83,28 +95,36 @@ async function main(): Promise<void> {
     joystickZone.addEventListener('touchend', onJoystickEnd, { passive: false });
     joystickZone.addEventListener('touchcancel', onJoystickEnd, { passive: false });
 
-    lookZone.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            const t = e.changedTouches[i]!;
-            if (lookId !== -1) continue;
-            lookId = t.identifier;
-            lookPx = t.clientX;
-            lookPy = t.clientY;
-            controls.activateTouch();
-        }
-    }, { passive: false });
+    lookZone.addEventListener(
+        'touchstart',
+        (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i]!;
+                if (lookId !== -1) continue;
+                lookId = t.identifier;
+                lookPx = t.clientX;
+                lookPy = t.clientY;
+                controls.activateTouch();
+            }
+        },
+        { passive: false }
+    );
 
-    lookZone.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            const t = e.changedTouches[i]!;
-            if (t.identifier !== lookId) continue;
-            controls.addLookDelta(t.clientX - lookPx, t.clientY - lookPy);
-            lookPx = t.clientX;
-            lookPy = t.clientY;
-        }
-    }, { passive: false });
+    lookZone.addEventListener(
+        'touchmove',
+        (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i]!;
+                if (t.identifier !== lookId) continue;
+                controls.addLookDelta(t.clientX - lookPx, t.clientY - lookPy);
+                lookPx = t.clientX;
+                lookPy = t.clientY;
+            }
+        },
+        { passive: false }
+    );
 
     function onLookEnd(e: TouchEvent): void {
         for (let i = 0; i < e.changedTouches.length; i++) {
@@ -114,11 +134,15 @@ async function main(): Promise<void> {
     lookZone.addEventListener('touchend', onLookEnd, { passive: false });
     lookZone.addEventListener('touchcancel', onLookEnd, { passive: false });
 
-    btnJump.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        controls.triggerJump();
-        controls.activateTouch();
-    }, { passive: false });
+    btnJump.addEventListener(
+        'touchstart',
+        (e) => {
+            e.preventDefault();
+            controls.triggerJump();
+            controls.activateTouch();
+        },
+        { passive: false }
+    );
 
     // --- HUD: instructions ---
     const instructions = document.getElementById('instructions');
@@ -162,7 +186,9 @@ async function main(): Promise<void> {
             if (newRegionIdx >= 0 && newRegionIdx < map.regions.length) {
                 regionEl.textContent = map.regions[newRegionIdx]!.name;
                 regionEl.style.opacity = '1';
-                regionHideTimeoutId = window.setTimeout(() => { regionEl.style.opacity = '0'; }, 3000);
+                regionHideTimeoutId = window.setTimeout(() => {
+                    regionEl.style.opacity = '0';
+                }, 3000);
             } else {
                 regionEl.style.opacity = '0';
             }
@@ -176,7 +202,9 @@ async function main(): Promise<void> {
             const fps = Math.round(statsFrames / statsTime);
             const calls = ctx.renderer.info.render.calls;
             const tris = ctx.renderer.info.render.triangles;
-            statsEl.textContent = `${fps} fps | ${calls} draw | ${tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris} tris`;
+            statsEl.textContent = `${fps} fps | ${calls} draw | ${
+                tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
+            } tris`;
             statsFrames = 0;
             statsTime = 0;
         }

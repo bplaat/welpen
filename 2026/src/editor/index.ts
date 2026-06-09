@@ -502,14 +502,21 @@ function selectDefsComp(idx: number): void {
 // ---- Rebuild def objects in scene ----
 
 function rebuildDefObjects(def: ObjectDef): void {
-    const prevSel = mapSel && mapSel !== 'settings' && map.objects.find((o) => o.id === mapSel && o.defId === def.id) ? mapSel : null;
+    const prevSel =
+        mapSel && mapSel !== 'settings' && map.objects.find((o) => o.id === mapSel && o.defId === def.id)
+            ? mapSel
+            : null;
     if (prevSel) setObjectSelected(ctx, prevSel, false);
     for (const instance of map.objects) {
         if (instance.defId !== def.id) continue;
         const group = ctx.objectGroups.get(instance.id);
         if (group) rebuildObjectGroup(group, def, instance);
     }
-    rebuildDefInstanced(ctx, def, map.objects.filter((o) => o.defId === def.id));
+    rebuildDefInstanced(
+        ctx,
+        def,
+        map.objects.filter((o) => o.defId === def.id)
+    );
     if (prevSel) setObjectSelected(ctx, prevSel, true);
     if (defsSelDefId === def.id) rebuildDefsPreview();
 }
@@ -783,10 +790,13 @@ function renderRegionPanel(body: HTMLElement): void {
     }
     body.appendChild(makeSection('Region'));
     body.appendChild(
-        makeField('Name', textInput(region.name, (v) => {
-            region.name = v;
-            renderLeftPanel();
-        }))
+        makeField(
+            'Name',
+            textInput(region.name, (v) => {
+                region.name = v;
+                renderLeftPanel();
+            })
+        )
     );
     body.appendChild(
         actionBtn('Delete Region', 'danger', () => {
@@ -942,7 +952,8 @@ function renderMapSettings(body: HTMLElement): void {
             const newRM = new Array(newW * newD).fill(-1) as number[];
             for (let z = 0; z < oldD; z++) {
                 for (let x = 0; x < oldW; x++) {
-                    const nx = x + offsetX; const nz = z + offsetZ;
+                    const nx = x + offsetX;
+                    const nz = z + offsetZ;
                     if (nx >= 0 && nx < newW && nz >= 0 && nz < newD)
                         newRM[nz * newW + nx] = map.terrain.regionMap[z * oldW + x] ?? -1;
                 }
@@ -1329,9 +1340,9 @@ function openLayerDialog(layerIdx: number): void {
 
     const isEdit = layerIdx >= 0;
     titleEl.textContent = isEdit ? 'Edit Layer' : 'Add Layer';
-    nameInp.value = isEdit ? (map.terrain.layers[layerIdx]?.name ?? '') : '';
-    texInp.value = isEdit ? (map.terrain.layers[layerIdx]?.texture ?? '') : map.terrain.texture;
-    repeatInp.value = String(isEdit ? (map.terrain.layers[layerIdx]?.repeat ?? 1) : 1);
+    nameInp.value = isEdit ? map.terrain.layers[layerIdx]?.name ?? '' : '';
+    texInp.value = isEdit ? map.terrain.layers[layerIdx]?.texture ?? '' : map.terrain.texture;
+    repeatInp.value = String(isEdit ? map.terrain.layers[layerIdx]?.repeat ?? 1 : 1);
 
     const save = $('layer-dialog-save');
     const cancel = $('layer-dialog-cancel');
@@ -1370,7 +1381,9 @@ function openLayerDialog(layerIdx: number): void {
             const file = fi.files?.[0];
             if (!file) return;
             uploadTexture(file)
-                .then((path) => { texInp.value = path; })
+                .then((path) => {
+                    texInp.value = path;
+                })
                 .catch((e: unknown) => alert(`Upload failed: ${String(e)}`));
         });
         fi.click();
@@ -1530,7 +1543,15 @@ function setupViewportEvents(): void {
     document.addEventListener('mouseup', (e) => {
         if (e.button === 0) isMouseDown = false;
         if (e.button === 2) isRightMouseDown = false;
-        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter' || currentTool === 'erase') {
+        if (
+            currentTool === 'raise' ||
+            currentTool === 'lower' ||
+            currentTool === 'level' ||
+            currentTool === 'paint' ||
+            currentTool === 'region' ||
+            currentTool === 'scatter' ||
+            currentTool === 'erase'
+        ) {
             orbitControls.enabled = true;
         }
     });
@@ -1539,7 +1560,13 @@ function setupViewportEvents(): void {
         if (activeTab !== 'world') return;
         if (currentTool === 'place') {
             updateGhost(e);
-        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
+        } else if (
+            currentTool === 'raise' ||
+            currentTool === 'lower' ||
+            currentTool === 'level' ||
+            currentTool === 'paint' ||
+            currentTool === 'region'
+        ) {
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
         } else if (currentTool === 'scatter' || currentTool === 'erase') {
             brushHit = getScatterHit(e);
@@ -1911,7 +1938,6 @@ async function main(): Promise<void> {
     defsTransformHelper.visible = false;
     defsScene.add(defsTransformHelper);
 
-
     // --- Setup ---
     setupToolbarEvents();
     setupViewportEvents();
@@ -1944,10 +1970,26 @@ async function main(): Promise<void> {
             orbitControls.update();
             const terrainSync = (id: string) => syncObjectToInstanced(ctx, id);
             if (isMouseDown && (currentTool === 'raise' || currentTool === 'lower') && brushHit) {
-                terrainEditor.applyBrush(brushHit, currentTool === 'raise', brushSize, delta, map.objects, ctx.objectGroups, terrainSync);
+                terrainEditor.applyBrush(
+                    brushHit,
+                    currentTool === 'raise',
+                    brushSize,
+                    delta,
+                    map.objects,
+                    ctx.objectGroups,
+                    terrainSync
+                );
             }
             if (isMouseDown && currentTool === 'level' && brushHit) {
-                terrainEditor.applyLevelBrush(brushHit, levelTargetHeight, brushSize, delta, map.objects, ctx.objectGroups, terrainSync);
+                terrainEditor.applyLevelBrush(
+                    brushHit,
+                    levelTargetHeight,
+                    brushSize,
+                    delta,
+                    map.objects,
+                    ctx.objectGroups,
+                    terrainSync
+                );
             }
             if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
                 terrainEditor.applyPaintBrush(brushHit, paintLayerIndex, brushSize, delta, isRightMouseDown);
@@ -2035,8 +2077,9 @@ async function main(): Promise<void> {
             const fps = Math.round(statsFrames / statsTime);
             const calls = ctx.renderer.info.render.calls;
             const tris = ctx.renderer.info.render.triangles;
-            ($('stats') as HTMLSpanElement).textContent =
-                `${fps} fps | ${calls} draw | ${tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris} tris`;
+            ($('stats') as HTMLSpanElement).textContent = `${fps} fps | ${calls} draw | ${
+                tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
+            } tris`;
             statsFrames = 0;
             statsTime = 0;
         }

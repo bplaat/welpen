@@ -113,7 +113,10 @@ export class TerrainEditor {
             if (Math.abs(iy - terrainY) <= SNAP_THRESHOLD) {
                 inst.position[1] = terrainY;
                 const group = objectGroups.get(inst.id);
-                if (group) { group.position.y = terrainY; syncFn?.(inst.id); }
+                if (group) {
+                    group.position.y = terrainY;
+                    syncFn?.(inst.id);
+                }
             }
         }
     }
@@ -153,7 +156,10 @@ export class TerrainEditor {
             if (Math.abs(iy - terrainY) <= SNAP_THRESHOLD) {
                 inst.position[1] = terrainY;
                 const group = objectGroups.get(inst.id);
-                if (group) { group.position.y = terrainY; syncFn?.(inst.id); }
+                if (group) {
+                    group.position.y = terrainY;
+                    syncFn?.(inst.id);
+                }
             }
         }
     }
