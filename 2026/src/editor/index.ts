@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import './editor.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -1910,10 +1911,6 @@ async function main(): Promise<void> {
     defsTransformHelper.visible = false;
     defsScene.add(defsTransformHelper);
 
-    new ResizeObserver(() => {
-        defsCamera.aspect = viewport.clientWidth / viewport.clientHeight;
-        defsCamera.updateProjectionMatrix();
-    }).observe(viewport);
 
     // --- Setup ---
     setupToolbarEvents();
@@ -2015,6 +2012,19 @@ async function main(): Promise<void> {
             }
             renderFrame(ctx);
         } else {
+            const canvas = ctx.renderer.domElement;
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            if (w > 0 && h > 0) {
+                const pr = ctx.renderer.getPixelRatio();
+                if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
+                    ctx.camera.aspect = w / h;
+                    ctx.camera.updateProjectionMatrix();
+                    defsCamera.aspect = w / h;
+                    defsCamera.updateProjectionMatrix();
+                    ctx.renderer.setSize(w, h, false);
+                }
+            }
             defsOrbit.update();
             ctx.renderer.render(defsScene, defsCamera);
         }

@@ -7,70 +7,32 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
         <title>Welpen Game 2026: ?</title>
         <link rel="icon" href="data:," />
-        <style>
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-            }
-            html,
-            body {
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-                background: #000;
-            }
-            canvas {
-                display: block;
-                width: 100% !important;
-                height: 100% !important;
-            }
-
-            #instructions {
-                position: fixed;
-                bottom: 16px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: rgba(0, 0, 0, 0.55);
-                color: #fff;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-family: system-ui, sans-serif;
-                font-size: 13px;
-                text-align: center;
-                transition: opacity 0.5s;
-                pointer-events: none;
-            }
-            #instructions.hidden {
-                opacity: 0;
-            }
-
-            #region-name {
-                position: fixed;
-                top: 8%;
-                left: 50%;
-                transform: translateX(-50%);
-                color: #fff;
-                font-family: system-ui, sans-serif;
-                font-size: 26px;
-                font-weight: 600;
-                text-align: center;
-                opacity: 0;
-                transition: opacity 0.6s ease;
-                pointer-events: none;
-                text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.5);
-                letter-spacing: 0.05em;
-            }
-        </style>
     </head>
     <body>
+        <div id="stats"></div>
         <div id="instructions">
             Click to capture mouse &bull; WASD move &bull; Mouse look &bull; Shift sprint &bull; Space jump &bull; Esc release
         </div>
         <div id="region-name"></div>
+
+        <div id="touch-controls">
+            <div id="joystick-zone">
+                <div id="joystick-base">
+                    <div id="joystick-thumb"></div>
+                </div>
+            </div>
+            <div id="look-zone"></div>
+            <button id="btn-jump">Jump</button>
+        </div>
+
+        <div id="landscape-prompt">
+            <span id="landscape-icon">&#8635;</span>
+            <span>Rotate your device to landscape</span>
+        </div>
+
         <script type="module" src="./src/main.ts"></script>
     </body>
 </html>

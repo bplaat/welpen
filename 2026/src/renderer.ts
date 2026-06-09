@@ -711,17 +711,22 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
         for (const m of data.meshes) m.instanceMatrix.needsUpdate = true;
     }
 
-    const resizeObserver = new ResizeObserver(() => {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    });
-    resizeObserver.observe(container);
-
     return { scene, camera, renderer, terrainMesh, terrainSplatMap, regionOverlayTex, objectGroups, instancedDefs, ambientLight, sunLight };
 }
 
 export function renderFrame(ctx: RendererContext): void {
+    // Resize inside the RAF callback so the buffer clear and render happen in the same frame
+    const canvas = ctx.renderer.domElement;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w > 0 && h > 0) {
+        const pr = ctx.renderer.getPixelRatio();
+        if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
+            ctx.camera.aspect = w / h;
+            ctx.camera.updateProjectionMatrix();
+            ctx.renderer.setSize(w, h, false);
+        }
+    }
     const camPos = ctx.camera.position;
     for (const [, data] of ctx.instancedDefs) {
         for (let ci = 0; ci < data.meshes.length; ci++) {

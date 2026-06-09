@@ -12,6 +12,7 @@ import type { Terrain } from './types.ts';
 const WALK_SPEED = 6;
 const RUN_SPEED = 10;
 const MOUSE_SENSITIVITY = 0.002;
+const TOUCH_LOOK_SENSITIVITY = 0.003;
 const PITCH_MIN = -0.4;
 const PITCH_MAX = 0.8;
 const PLAYER_HEIGHT = 1.1;
@@ -43,6 +44,18 @@ export class ThirdPersonControls {
     private facingYaw = 0;
     private targetFacingYaw = 0;
 
+    // Touch input state
+    private touchActive = false;
+    private touchMoveX = 0;
+    private touchMoveY = 0;
+    private touchLookDX = 0;
+    private touchLookDY = 0;
+
+    // Scratch vectors to avoid per-frame allocations
+    private readonly _fwd = new THREE.Vector3();
+    private readonly _right = new THREE.Vector3();
+    private readonly _move = new THREE.Vector3();
+
     constructor(
         camera: THREE.PerspectiveCamera,
         domElement: HTMLElement,
@@ -54,15 +67,11 @@ export class ThirdPersonControls {
         this.terrain = terrain;
         this.character = character;
         this.loadFromStorage();
-        // Snap player to terrain on startup
         this.playerPos.y = getTerrainY(this.terrain, this.playerPos.x, this.playerPos.z) + PLAYER_HEIGHT;
         this.facingYaw = this.yaw;
         this.targetFacingYaw = this.yaw;
         this.bindEvents();
-        // When jump animation finishes, return to idle/walk/run
-        this.character.onJumpFinished = () => {
-            this.jumping = false;
-        };
+        this.character.onJumpFinished = () => { this.jumping = false; };
         this.updateCamera();
     }
 
@@ -75,21 +84,16 @@ export class ThirdPersonControls {
             this.playerPos.z = s.z;
             this.yaw = s.yaw;
             this.pitch = s.pitch;
-        } catch {
-            /* ignore */
-        }
+        } catch { /* ignore */ }
     }
 
     private saveToStorage(): void {
-        localStorage.setItem(
-            LS_KEY,
-            JSON.stringify({
-                x: this.playerPos.x,
-                z: this.playerPos.z,
-                yaw: this.yaw,
-                pitch: this.pitch,
-            }),
-        );
+        localStorage.setItem(LS_KEY, JSON.stringify({
+            x: this.playerPos.x,
+            z: this.playerPos.z,
+            yaw: this.yaw,
+            pitch: this.pitch,
+        }));
     }
 
     private bindEvents(): void {
@@ -107,12 +111,8 @@ export class ThirdPersonControls {
         });
         document.addEventListener('keydown', (e: KeyboardEvent) => {
             this.keys.add(e.code);
-            if (e.code === 'Space' && this.grounded && this.locked) {
-                this.verticalVel = JUMP_VELOCITY;
-                this.grounded = false;
-                this.jumping = true;
-                // Speed jump playback up so the animation reaches the apex sooner.
-                this.character.setState('jump', (JUMP_VELOCITY / Math.abs(GRAVITY)) * 1.25);
+            if (e.code === 'Space' && this.grounded && this.isLocked()) {
+                this.doJump();
             }
         });
         document.addEventListener('keyup', (e: KeyboardEvent) => {
@@ -120,61 +120,96 @@ export class ThirdPersonControls {
         });
     }
 
-    private updateCamera(): void {
-        const groundY = getTerrainY(this.terrain, this.playerPos.x, this.playerPos.z);
-        // Character feet follow the actual player Y (rises during jump)
-        const feetY = this.playerPos.y - PLAYER_HEIGHT;
-        // Camera pivot tracks the player center with a height offset
-        const pivotY = this.playerPos.y + CAMERA_HEIGHT_OFFSET;
+    private doJump(): void {
+        this.verticalVel = JUMP_VELOCITY;
+        this.grounded = false;
+        this.jumping = true;
+        this.character.setState('jump', (JUMP_VELOCITY / Math.abs(GRAVITY)) * 1.25);
+    }
 
-        // Orbit camera behind player
+    private updateCamera(): void {
+        const feetY = this.playerPos.y - PLAYER_HEIGHT;
+        const pivotY = this.playerPos.y + CAMERA_HEIGHT_OFFSET;
         const camX = this.playerPos.x + Math.sin(this.yaw) * CAMERA_DISTANCE * Math.cos(this.pitch);
         const camY = pivotY + Math.sin(this.pitch) * CAMERA_DISTANCE;
         const camZ = this.playerPos.z + Math.cos(this.yaw) * CAMERA_DISTANCE * Math.cos(this.pitch);
-
         this.camera.position.set(camX, camY, camZ);
         this.camera.lookAt(this.playerPos.x, pivotY, this.playerPos.z);
-
-        // Character group sits at feet position
         this.character.group.position.set(this.playerPos.x, feetY, this.playerPos.z);
         this.character.group.rotation.y = this.facingYaw;
-
-        // Prevent character from sinking below terrain (clamp feet to ground)
-        if (feetY < groundY) {
-            this.character.group.position.y = groundY;
-        }
+        const groundY = getTerrainY(this.terrain, this.playerPos.x, this.playerPos.z);
+        if (feetY < groundY) this.character.group.position.y = groundY;
     }
 
+    // --- Public touch API ---
+
+    activateTouch(): void { this.touchActive = true; }
+
+    setTouchMove(x: number, y: number): void {
+        this.touchMoveX = x;
+        this.touchMoveY = y;
+    }
+
+    addLookDelta(dx: number, dy: number): void {
+        this.touchLookDX += dx;
+        this.touchLookDY += dy;
+    }
+
+    triggerJump(): void {
+        if (this.grounded) this.doJump();
+    }
+
+    isLocked(): boolean { return this.locked || this.touchActive; }
+
+    // ---
+
     update(delta: number): void {
-        if (!this.locked) {
+        if (!this.locked && !this.touchActive) {
             this.character.update(delta);
             this.updateCamera();
             return;
         }
 
-        const boost = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
-        const movingW = this.keys.has('KeyW');
-        const movingS = this.keys.has('KeyS');
-        const movingA = this.keys.has('KeyA');
-        const movingD = this.keys.has('KeyD');
-        const moving = movingW || movingS || movingA || movingD;
+        // Apply accumulated touch look delta
+        if (this.touchLookDX !== 0 || this.touchLookDY !== 0) {
+            this.yaw -= this.touchLookDX * TOUCH_LOOK_SENSITIVITY;
+            this.pitch -= this.touchLookDY * TOUCH_LOOK_SENSITIVITY;
+            this.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, this.pitch));
+            this.touchLookDX = 0;
+            this.touchLookDY = 0;
+        }
+
+        // Combine keyboard + joystick input
+        let fwd = this.touchMoveY;
+        let strafe = this.touchMoveX;
+        if (this.keys.has('KeyW')) fwd = Math.min(1, fwd + 1);
+        if (this.keys.has('KeyS')) fwd = Math.max(-1, fwd - 1);
+        if (this.keys.has('KeyA')) strafe = Math.max(-1, strafe - 1);
+        if (this.keys.has('KeyD')) strafe = Math.min(1, strafe + 1);
+
+        const inputLenSq = fwd * fwd + strafe * strafe;
+        const moving = inputLenSq > 0.0001;
+
+        // Auto-sprint when joystick is pushed past 75% or shift held
+        const touchMag = Math.sqrt(this.touchMoveX * this.touchMoveX + this.touchMoveY * this.touchMoveY);
+        const boost = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || touchMag > 0.75;
 
         if (moving) {
+            const inputLen = Math.sqrt(inputLenSq);
             const speed = (boost ? RUN_SPEED : WALK_SPEED) * delta;
-            const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-            const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
 
-            const moveDir = new THREE.Vector3();
-            if (movingW) moveDir.addScaledVector(forward, 1);
-            if (movingS) moveDir.addScaledVector(forward, -1);
-            if (movingA) moveDir.addScaledVector(right, -1);
-            if (movingD) moveDir.addScaledVector(right, 1);
+            this._fwd.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+            this._right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
 
-            if (moveDir.lengthSq() > 0) {
-                moveDir.normalize();
-                this.playerPos.x += moveDir.x * speed;
-                this.playerPos.z += moveDir.z * speed;
-                this.targetFacingYaw = Math.atan2(moveDir.x, moveDir.z);
+            this._move.set(0, 0, 0);
+            this._move.addScaledVector(this._fwd, fwd / inputLen);
+            this._move.addScaledVector(this._right, strafe / inputLen);
+
+            if (this._move.lengthSq() > 0) {
+                this._move.normalize();
+                this.playerPos.x += this._move.x * speed;
+                this.playerPos.z += this._move.z * speed;
+                this.targetFacingYaw = Math.atan2(this._move.x, this._move.z);
             }
 
             if (!this.jumping) this.character.setState(boost ? 'run' : 'walk');
@@ -182,19 +217,16 @@ export class ThirdPersonControls {
             if (!this.jumping) this.character.setState('idle');
         }
 
-        // Vertical: gravity + jump
         this.prevVerticalVel = this.verticalVel;
         this.verticalVel += GRAVITY * delta;
         this.playerPos.y += this.verticalVel * delta;
 
-        // Detect arc peak: was going up, now going down -> reverse jump animation
         if (this.jumping && this.prevVerticalVel > 0 && this.verticalVel <= 0) {
             this.character.reverseJump();
         }
 
         this.facingYaw += shortestAngleDelta(this.facingYaw, this.targetFacingYaw) * Math.min(1, TURN_SPEED * delta);
 
-        // Ground collision
         const groundY = getTerrainY(this.terrain, this.playerPos.x, this.playerPos.z);
         const groundLevel = groundY + PLAYER_HEIGHT;
         if (this.playerPos.y <= groundLevel) {
@@ -208,9 +240,5 @@ export class ThirdPersonControls {
         this.character.update(delta);
         this.updateCamera();
         this.saveToStorage();
-    }
-
-    isLocked(): boolean {
-        return this.locked;
     }
 }
