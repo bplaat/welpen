@@ -51,6 +51,12 @@ export class TerrainEditor {
         this.brushIndicator.visible = show;
     }
 
+    positionBrush(pt: THREE.Vector3, brushSize: number): void {
+        this.brushIndicator.position.set(pt.x, pt.y + 0.05, pt.z);
+        this.brushIndicator.scale.set(brushSize, 1, brushSize);
+        this.brushIndicator.visible = true;
+    }
+
     onMouseMove(
         e: MouseEvent,
         camera: THREE.PerspectiveCamera,
@@ -81,7 +87,8 @@ export class TerrainEditor {
         brushSize: number,
         delta: number,
         instances: ObjectInstance[],
-        objectGroups: Map<string, THREE.Group>
+        objectGroups: Map<string, THREE.Group>,
+        syncFn?: (instanceId: string) => void
     ): void {
         const { width, depth, cellSize, heights } = this.terrain;
         const halfW = ((width - 1) * cellSize) / 2;
@@ -100,14 +107,13 @@ export class TerrainEditor {
         }
         updateTerrainGeometry(this.terrainMesh, this.terrain);
 
-        // Snap nearby grounded objects to new terrain height
         for (const inst of instances) {
             const [ix, iy, iz] = inst.position;
             const terrainY = getTerrainY(this.terrain, ix, iz);
             if (Math.abs(iy - terrainY) <= SNAP_THRESHOLD) {
                 inst.position[1] = terrainY;
                 const group = objectGroups.get(inst.id);
-                if (group) group.position.y = terrainY;
+                if (group) { group.position.y = terrainY; syncFn?.(inst.id); }
             }
         }
     }
@@ -118,7 +124,8 @@ export class TerrainEditor {
         brushSize: number,
         delta: number,
         instances: ObjectInstance[],
-        objectGroups: Map<string, THREE.Group>
+        objectGroups: Map<string, THREE.Group>,
+        syncFn?: (instanceId: string) => void
     ): void {
         const { width, depth, cellSize, heights } = this.terrain;
         const halfW = ((width - 1) * cellSize) / 2;
@@ -146,7 +153,7 @@ export class TerrainEditor {
             if (Math.abs(iy - terrainY) <= SNAP_THRESHOLD) {
                 inst.position[1] = terrainY;
                 const group = objectGroups.get(inst.id);
-                if (group) group.position.y = terrainY;
+                if (group) { group.position.y = terrainY; syncFn?.(inst.id); }
             }
         }
     }

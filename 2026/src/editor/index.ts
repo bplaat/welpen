@@ -15,6 +15,11 @@ import {
     rebuildTerrain,
     getTerrainY,
     isAutoRotatedDef,
+    addObjectInstance,
+    removeObjectInstance,
+    syncObjectToInstanced,
+    setObjectSelected,
+    rebuildDefInstanced,
     createRenderer,
     renderFrame,
     updateRegionOverlay,
@@ -56,7 +61,7 @@ let defsTransformHelper: THREE.Object3D;
 let defsGroup: THREE.Group;
 
 type Tab = 'world' | 'defs';
-type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region' | 'scatter';
+type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region' | 'scatter' | 'erase';
 type TransformMode = 'translate' | 'rotate' | 'scale';
 
 let activeTab: Tab = 'world';
@@ -89,6 +94,15 @@ const keysDown = new Set<string>();
 // Scatter tool
 let scatterAccum = 0;
 let scatterIdSeq = 0;
+
+// Stats counter
+let statsFrames = 0;
+let statsTime = 0;
+
+// Scratch vectors for WASD camera movement (avoid per-frame allocations)
+const _wasdForward = new THREE.Vector3();
+const _wasdRight = new THREE.Vector3();
+const _wasdMove = new THREE.Vector3();
 
 // ---- DOM helpers ----
 
@@ -256,11 +270,46 @@ function getTerrainHit(e: MouseEvent): THREE.Vector3 | null {
     return hits.length > 0 ? hits[0]!.point : null;
 }
 
+const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const _groundTarget = new THREE.Vector3();
+
+// Like onMouseMove but falls back to a y=0 ground plane outside terrain bounds.
+function getScatterHit(e: MouseEvent): THREE.Vector3 | null {
+    raycaster.setFromCamera(getNDC(e), ctx.camera);
+    const terrainHits = raycaster.intersectObject(ctx.terrainMesh);
+    if (terrainHits.length > 0) {
+        const pt = terrainHits[0]!.point;
+        terrainEditor.positionBrush(pt, brushSize);
+        return pt;
+    }
+    const hit = raycaster.ray.intersectPlane(_groundPlane, _groundTarget);
+    if (hit) {
+        terrainEditor.positionBrush(_groundTarget, brushSize);
+        return _groundTarget.clone();
+    }
+    return null;
+}
+
 function getObjectHit(e: MouseEvent): THREE.Group | null {
     raycaster.setFromCamera(getNDC(e), ctx.camera);
-    const hits = raycaster.intersectObjects(Array.from(ctx.objectGroups.values()), true);
+    const targets: THREE.Object3D[] = [];
+    for (const [, data] of ctx.instancedDefs) targets.push(...data.meshes);
+    if (mapSel && mapSel !== 'settings') {
+        const sel = ctx.objectGroups.get(mapSel);
+        if (sel?.visible) targets.push(sel);
+    }
+    const hits = raycaster.intersectObjects(targets, true);
     if (hits.length === 0) return null;
-    let obj: THREE.Object3D | null = hits[0]!.object;
+    const hit = hits[0]!;
+    if (hit.object instanceof THREE.InstancedMesh) {
+        const defId = hit.object.userData['defId'] as string;
+        const slot = hit.instanceId ?? -1;
+        if (slot < 0) return null;
+        const instanceId = ctx.instancedDefs.get(defId)?.reverseSlots.get(slot);
+        if (!instanceId) return null;
+        return ctx.objectGroups.get(instanceId) ?? null;
+    }
+    let obj: THREE.Object3D | null = hit.object;
     while (obj && !obj.userData['instanceId']) obj = obj.parent;
     return obj instanceof THREE.Group ? obj : null;
 }
@@ -317,8 +366,10 @@ function setGhostDef(defId: string | null): void {
 // ---- World editor selection ----
 
 function selectMapItem(sel: 'settings' | string | null): void {
+    if (mapSel && mapSel !== 'settings') setObjectSelected(ctx, mapSel, false);
     mapSel = sel;
     if (sel && sel !== 'settings') {
+        setObjectSelected(ctx, sel, true);
         const group = ctx.objectGroups.get(sel);
         if (group) {
             transformControls.attach(group);
@@ -335,6 +386,7 @@ function selectMapItem(sel: 'settings' | string | null): void {
 }
 
 function clearSelection(): void {
+    if (mapSel && mapSel !== 'settings') setObjectSelected(ctx, mapSel, false);
     mapSel = null;
     transformControls.detach();
     selectionBox.visible = false;
@@ -356,6 +408,8 @@ function syncInstanceFromGroup(group: THREE.Group): void {
     instance.scale[1] = group.scale.y;
     instance.scale[2] = group.scale.z;
     selectionBox.setFromObject(group);
+    // Keep InstancedMesh slot in sync (stays scale=0 while selected; updated on deselect)
+    syncObjectToInstanced(ctx, instanceId);
     const setVal = (attr: string, v: number) => {
         const inp = document.querySelector(`[data-field="${attr}"]`) as HTMLInputElement | null;
         if (inp && document.activeElement !== inp) inp.value = v.toFixed(3);
@@ -447,11 +501,15 @@ function selectDefsComp(idx: number): void {
 // ---- Rebuild def objects in scene ----
 
 function rebuildDefObjects(def: ObjectDef): void {
+    const prevSel = mapSel && mapSel !== 'settings' && map.objects.find((o) => o.id === mapSel && o.defId === def.id) ? mapSel : null;
+    if (prevSel) setObjectSelected(ctx, prevSel, false);
     for (const instance of map.objects) {
         if (instance.defId !== def.id) continue;
         const group = ctx.objectGroups.get(instance.id);
         if (group) rebuildObjectGroup(group, def, instance);
     }
+    rebuildDefInstanced(ctx, def, map.objects.filter((o) => o.defId === def.id));
+    if (prevSel) setObjectSelected(ctx, prevSel, true);
     if (defsSelDefId === def.id) rebuildDefsPreview();
 }
 
@@ -987,9 +1045,14 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                 map.objectDefs.map((d) => d.id),
                 (v) => {
                     instance.defId = v;
-                    const def = map.objectDefs.find((d) => d.id === v);
-                    const group = ctx.objectGroups.get(instance.id);
-                    if (def && group) rebuildObjectGroup(group, def, instance);
+                    const newDef = map.objectDefs.find((d) => d.id === v);
+                    if (newDef) {
+                        const wasSelected = mapSel === instance.id;
+                        if (wasSelected) setObjectSelected(ctx, instance.id, false);
+                        removeObjectInstance(ctx, instance.id);
+                        addObjectInstance(ctx, newDef, instance);
+                        if (wasSelected) setObjectSelected(ctx, instance.id, true);
+                    }
                     renderLeftPanel();
                 }
             )
@@ -1006,6 +1069,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                 if (g) {
                     g.position.setComponent(i, v);
                     selectionBox.setFromObject(g);
+                    syncObjectToInstanced(ctx, instance.id);
                 }
             },
             ['pos-x', 'pos-y', 'pos-z']
@@ -1022,6 +1086,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                 if (g) {
                     g.rotation.set(instance.rotation[0], instance.rotation[1], instance.rotation[2]);
                     selectionBox.setFromObject(g);
+                    syncObjectToInstanced(ctx, instance.id);
                 }
             },
             ['rot-x', 'rot-y', 'rot-z']
@@ -1038,6 +1103,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                 if (g) {
                     g.scale.setComponent(i, Math.max(0.001, v));
                     selectionBox.setFromObject(g);
+                    syncObjectToInstanced(ctx, instance.id);
                 }
             },
             ['scl-x', 'scl-y', 'scl-z']
@@ -1046,11 +1112,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
 
     body.appendChild(
         actionBtn('Delete Instance', 'danger', () => {
-            const group = ctx.objectGroups.get(instance.id);
-            if (group) {
-                ctx.scene.remove(group);
-                ctx.objectGroups.delete(instance.id);
-            }
+            removeObjectInstance(ctx, instance.id);
             map.objects = map.objects.filter((o) => o.id !== instance.id);
             clearSelection();
         })
@@ -1329,11 +1391,11 @@ function openLayerDialog(layerIdx: number): void {
 
 function setTool(tool: MapTool): void {
     currentTool = tool;
-    (['select', 'place', 'raise', 'lower', 'level', 'paint', 'scatter'] as const).forEach((t) => {
+    (['select', 'place', 'raise', 'lower', 'level', 'paint', 'scatter', 'erase'] as const).forEach((t) => {
         $(`btn-${t}`).classList.toggle('active', t === tool);
     });
     const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint' || tool === 'region';
-    const showBrush = isTerrain || tool === 'scatter';
+    const showBrush = isTerrain || tool === 'scatter' || tool === 'erase';
     $('brush-controls').classList.toggle('visible', showBrush);
     terrainEditor.showBrush(showBrush);
     contourMesh.visible = tool === 'raise' || tool === 'lower' || tool === 'level';
@@ -1439,9 +1501,7 @@ function setupViewportEvents(): void {
                 scale: [1, 1, 1],
             };
             map.objects.push(instance);
-            const group = buildObjectGroup(def, instance);
-            ctx.scene.add(group);
-            ctx.objectGroups.set(instance.id, group);
+            addObjectInstance(ctx, def, instance);
             // Stay in place mode - do not switch to select
             renderLeftPanel();
         } else if (currentTool === 'raise' || currentTool === 'lower') {
@@ -1460,16 +1520,16 @@ function setupViewportEvents(): void {
             if (e.button !== 0 && e.button !== 2) return;
             orbitControls.enabled = false;
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
-        } else if (currentTool === 'scatter') {
+        } else if (currentTool === 'scatter' || currentTool === 'erase') {
             orbitControls.enabled = false;
-            brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+            brushHit = getScatterHit(e);
         }
     });
 
     document.addEventListener('mouseup', (e) => {
         if (e.button === 0) isMouseDown = false;
         if (e.button === 2) isRightMouseDown = false;
-        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter') {
+        if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter' || currentTool === 'erase') {
             orbitControls.enabled = true;
         }
     });
@@ -1478,8 +1538,10 @@ function setupViewportEvents(): void {
         if (activeTab !== 'world') return;
         if (currentTool === 'place') {
             updateGhost(e);
-        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region' || currentTool === 'scatter') {
+        } else if (currentTool === 'raise' || currentTool === 'lower' || currentTool === 'level' || currentTool === 'paint' || currentTool === 'region') {
             brushHit = terrainEditor.onMouseMove(e, ctx.camera, canvas, brushSize);
+        } else if (currentTool === 'scatter' || currentTool === 'erase') {
+            brushHit = getScatterHit(e);
         }
     });
 
@@ -1501,6 +1563,7 @@ function setupToolbarEvents(): void {
     $('btn-level').addEventListener('click', () => setTool('level'));
     $('btn-paint').addEventListener('click', () => setTool('paint'));
     $('btn-scatter').addEventListener('click', () => setTool('scatter'));
+    $('btn-erase').addEventListener('click', () => setTool('erase'));
     $('btn-translate').addEventListener('click', () => setTransformMode('translate'));
     $('btn-rotate').addEventListener('click', () => setTransformMode('rotate'));
     $('btn-scale').addEventListener('click', () => setTransformMode('scale'));
@@ -1656,11 +1719,7 @@ function setupToolbarEvents(): void {
         e.preventDefault();
         if (activeTab === 'world' && !e.repeat) {
             if (e.code === 'Delete' && mapSel && mapSel !== 'settings') {
-                const group = ctx.objectGroups.get(mapSel);
-                if (group) {
-                    ctx.scene.remove(group);
-                    ctx.objectGroups.delete(mapSel);
-                }
+                removeObjectInstance(ctx, mapSel);
                 map.objects = map.objects.filter((o) => o.id !== mapSel);
                 clearSelection();
             }
@@ -1873,32 +1932,25 @@ async function main(): Promise<void> {
         if (activeTab === 'world') {
             const moveSpeed = 120 * delta;
             if (keysDown.has('KeyW') || keysDown.has('KeyA') || keysDown.has('KeyS') || keysDown.has('KeyD')) {
-                const forward = new THREE.Vector3();
-                ctx.camera.getWorldDirection(forward);
-                forward.y = 0;
-                forward.normalize();
-                const right = new THREE.Vector3().crossVectors(forward, THREE.Object3D.DEFAULT_UP).normalize();
-                const move = new THREE.Vector3();
-                if (keysDown.has('KeyW')) move.addScaledVector(forward, moveSpeed);
-                if (keysDown.has('KeyS')) move.addScaledVector(forward, -moveSpeed);
-                if (keysDown.has('KeyA')) move.addScaledVector(right, -moveSpeed);
-                if (keysDown.has('KeyD')) move.addScaledVector(right, moveSpeed);
-                ctx.camera.position.add(move);
-                orbitControls.target.add(move);
+                ctx.camera.getWorldDirection(_wasdForward);
+                _wasdForward.y = 0;
+                _wasdForward.normalize();
+                _wasdRight.crossVectors(_wasdForward, THREE.Object3D.DEFAULT_UP).normalize();
+                _wasdMove.set(0, 0, 0);
+                if (keysDown.has('KeyW')) _wasdMove.addScaledVector(_wasdForward, moveSpeed);
+                if (keysDown.has('KeyS')) _wasdMove.addScaledVector(_wasdForward, -moveSpeed);
+                if (keysDown.has('KeyA')) _wasdMove.addScaledVector(_wasdRight, -moveSpeed);
+                if (keysDown.has('KeyD')) _wasdMove.addScaledVector(_wasdRight, moveSpeed);
+                ctx.camera.position.add(_wasdMove);
+                orbitControls.target.add(_wasdMove);
             }
             orbitControls.update();
+            const terrainSync = (id: string) => syncObjectToInstanced(ctx, id);
             if (isMouseDown && (currentTool === 'raise' || currentTool === 'lower') && brushHit) {
-                terrainEditor.applyBrush(
-                    brushHit,
-                    currentTool === 'raise',
-                    brushSize,
-                    delta,
-                    map.objects,
-                    ctx.objectGroups
-                );
+                terrainEditor.applyBrush(brushHit, currentTool === 'raise', brushSize, delta, map.objects, ctx.objectGroups, terrainSync);
             }
             if (isMouseDown && currentTool === 'level' && brushHit) {
-                terrainEditor.applyLevelBrush(brushHit, levelTargetHeight, brushSize, delta, map.objects, ctx.objectGroups);
+                terrainEditor.applyLevelBrush(brushHit, levelTargetHeight, brushSize, delta, map.objects, ctx.objectGroups, terrainSync);
             }
             if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
                 terrainEditor.applyPaintBrush(brushHit, paintLayerIndex, brushSize, delta, isRightMouseDown);
@@ -1928,10 +1980,23 @@ async function main(): Promise<void> {
                             scale: [1, 1, 1],
                         };
                         map.objects.push(instance);
-                        const group = buildObjectGroup(def, instance);
-                        ctx.scene.add(group);
-                        ctx.objectGroups.set(instance.id, group);
+                        addObjectInstance(ctx, def, instance);
                     }
+                }
+            }
+            if (isMouseDown && currentTool === 'erase' && brushHit) {
+                const hit = brushHit;
+                const r2 = brushSize * brushSize;
+                const toRemove = map.objects.filter((o) => {
+                    const dx = o.position[0] - hit.x;
+                    const dz = o.position[2] - hit.z;
+                    return dx * dx + dz * dz <= r2;
+                });
+                if (toRemove.length > 0) {
+                    if (mapSel && toRemove.some((o) => o.id === mapSel)) clearSelection();
+                    for (const o of toRemove) removeObjectInstance(ctx, o.id);
+                    const removeIds = new Set(toRemove.map((o) => o.id));
+                    map.objects = map.objects.filter((o) => !removeIds.has(o.id));
                 }
             }
             if (isRightMouseDown && currentTool === 'scatter' && brushHit) {
@@ -1942,12 +2007,8 @@ async function main(): Promise<void> {
                     const dz = o.position[2] - hit.z;
                     return dx * dx + dz * dz <= r2;
                 });
-                for (const o of toRemove) {
-                    const group = ctx.objectGroups.get(o.id);
-                    if (group) ctx.scene.remove(group);
-                    ctx.objectGroups.delete(o.id);
-                }
                 if (toRemove.length > 0) {
+                    for (const o of toRemove) removeObjectInstance(ctx, o.id);
                     const removeIds = new Set(toRemove.map((o) => o.id));
                     map.objects = map.objects.filter((o) => !removeIds.has(o.id));
                 }
@@ -1956,6 +2017,18 @@ async function main(): Promise<void> {
         } else {
             defsOrbit.update();
             ctx.renderer.render(defsScene, defsCamera);
+        }
+
+        statsFrames++;
+        statsTime += delta;
+        if (statsTime >= 0.5) {
+            const fps = Math.round(statsFrames / statsTime);
+            const calls = ctx.renderer.info.render.calls;
+            const tris = ctx.renderer.info.render.triangles;
+            ($('stats') as HTMLSpanElement).textContent =
+                `${fps} fps | ${calls} draw | ${tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris} tris`;
+            statsFrames = 0;
+            statsTime = 0;
         }
     }
     frame();

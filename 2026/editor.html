@@ -109,6 +109,15 @@
                 background: #3a6a3a;
             }
 
+            /* Stats counter */
+            #stats {
+                font-family: monospace;
+                font-size: 11px;
+                color: #555;
+                white-space: nowrap;
+                margin-right: 4px;
+            }
+
             /* Brush size control */
             #brush-controls {
                 display: none;
@@ -479,6 +488,7 @@
                 <button id="btn-level" class="tb-btn" title="Level terrain (F)">Level</button>
                 <button id="btn-paint" class="tb-btn" title="Paint terrain (N)">Paint</button>
                 <button id="btn-scatter" class="tb-btn" title="Scatter objects">Scatter</button>
+                <button id="btn-erase" class="tb-btn" title="Erase objects">Erase</button>
                 <div id="brush-controls">
                     Brush: <input type="range" id="brush-size" min="1" max="64" value="4" />
                     <span id="brush-size-label">4</span>
@@ -508,6 +518,7 @@
             </div>
 
             <div class="spacer"></div>
+            <span id="stats"></span>
             <button id="btn-save" class="tb-btn green">Save</button>
         </div>
 

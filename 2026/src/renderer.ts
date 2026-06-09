@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import type {
     BillboardComponent,
+    Component,
     CubeComponent,
     CylinderComponent,
     GameMap,
@@ -349,7 +350,6 @@ function buildComponentMesh(
             map: tex,
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
-            side: THREE.DoubleSide,
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
@@ -372,7 +372,6 @@ function buildComponentMesh(
             map: tex,
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
-            side: THREE.DoubleSide,
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
@@ -384,9 +383,8 @@ function buildComponentMesh(
             alphaTest: comp.transparent ? 0.5 : 0,
         });
         mesh.onBeforeRender = (_r, _s, camera) => {
-            const worldPos = new THREE.Vector3();
-            mesh.getWorldPosition(worldPos);
-            mesh.rotation.y = Math.atan2(camera.position.x - worldPos.x, camera.position.z - worldPos.z);
+            mesh.getWorldPosition(_bbWorldPos);
+            mesh.rotation.y = Math.atan2(camera.position.x - _bbWorldPos.x, camera.position.z - _bbWorldPos.z);
         };
         return mesh;
     }
@@ -394,6 +392,215 @@ function buildComponentMesh(
 
 export function isAutoRotatedDef(def: ObjectDef): boolean {
     return def.components.length > 0 && def.components.every((c) => c.type === 'billboard' || c.type === 'sprite');
+}
+
+// --- Instanced rendering ---
+
+export interface InstancedDefData {
+    meshes: THREE.InstancedMesh[];
+    compAutoRotate: Array<'none' | 'billboard' | 'sprite'>;
+    slots: Map<string, number>;
+    reverseSlots: Map<number, string>;
+    freeSlots: number[];
+    capacity: number;
+}
+
+const _iPos = new THREE.Vector3();
+const _iQuat = new THREE.Quaternion();
+const _iScl = new THREE.Vector3();
+const _iMat = new THREE.Matrix4();
+const _iLookAt = new THREE.Matrix4();
+const _iEuler = new THREE.Euler();
+const _iUp = new THREE.Vector3(0, 1, 0);
+const _zeroScale = new THREE.Matrix4().makeScale(0, 0, 0);
+const _bbWorldPos = new THREE.Vector3();
+
+function compLocalMatrix(comp: Component): THREE.Matrix4 {
+    const pos = new THREE.Vector3(comp.position[0], comp.position[1], comp.position[2]);
+    let rot: THREE.Quaternion;
+    let scl: THREE.Vector3;
+    if (comp.type === 'billboard' || comp.type === 'sprite') {
+        rot = new THREE.Quaternion();
+        scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
+    } else if (comp.type === 'sphere') {
+        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        scl = new THREE.Vector3(comp.size[0], comp.size[0], comp.size[0]);
+    } else if (comp.type === 'plane') {
+        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
+    } else {
+        rot = new THREE.Quaternion().setFromEuler(new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]));
+        scl = new THREE.Vector3(comp.size[0], comp.size[1], comp.size[2]);
+    }
+    return new THREE.Matrix4().compose(pos, rot, scl);
+}
+
+function buildInstancedMeshForComp(comp: Component, capacity: number, defId: string): THREE.InstancedMesh {
+    let geo: THREE.BufferGeometry;
+    let mat: THREE.Material;
+    if (comp.type === 'cube') {
+        geo = new THREE.BoxGeometry(1, 1, 1);
+        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+    } else if (comp.type === 'plane') {
+        geo = new THREE.PlaneGeometry(1, 1);
+        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0, side: THREE.DoubleSide });
+    } else if (comp.type === 'cylinder') {
+        geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+    } else if (comp.type === 'sphere') {
+        geo = new THREE.SphereGeometry(0.5, 16, 12);
+        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+    } else {
+        geo = new THREE.PlaneGeometry(1, 1);
+        mat = new THREE.MeshLambertMaterial({ map: loadTexture(comp.texture), transparent: comp.transparent, alphaTest: comp.transparent ? 0.5 : 0 });
+    }
+    geo.applyMatrix4(compLocalMatrix(comp));
+    const imesh = new THREE.InstancedMesh(geo, mat, capacity);
+    imesh.castShadow = true;
+    imesh.receiveShadow = !comp.transparent;
+    imesh.userData['defId'] = defId;
+    imesh.count = 0;
+    for (let i = 0; i < capacity; i++) imesh.setMatrixAt(i, _zeroScale);
+    imesh.instanceMatrix.needsUpdate = true;
+    return imesh;
+}
+
+function makeInstanceMatrix(instance: ObjectInstance): THREE.Matrix4 {
+    return new THREE.Matrix4().compose(
+        new THREE.Vector3(instance.position[0], instance.position[1], instance.position[2]),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0)),
+        new THREE.Vector3(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1)
+    );
+}
+
+function createInstancedDef(scene: THREE.Scene, def: ObjectDef, capacity: number): InstancedDefData {
+    const meshes = def.components.map((comp) => {
+        const m = buildInstancedMeshForComp(comp, capacity, def.id);
+        scene.add(m);
+        return m;
+    });
+    return {
+        meshes,
+        compAutoRotate: def.components.map((c) => (c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none')),
+        slots: new Map(),
+        reverseSlots: new Map(),
+        freeSlots: [],
+        capacity,
+    };
+}
+
+function growInstancedDef(scene: THREE.Scene, data: InstancedDefData, def: ObjectDef): void {
+    const newCap = data.capacity * 2 + 16;
+    for (let ci = 0; ci < data.meshes.length; ci++) {
+        const old = data.meshes[ci]!;
+        const n = buildInstancedMeshForComp(def.components[ci]!, newCap, def.id);
+        const tmp = new THREE.Matrix4();
+        for (let s = 0; s < data.capacity; s++) { old.getMatrixAt(s, tmp); n.setMatrixAt(s, tmp); }
+        n.count = old.count;
+        n.instanceMatrix.needsUpdate = true;
+        scene.remove(old);
+        old.geometry.dispose();
+        scene.add(n);
+        data.meshes[ci] = n;
+    }
+    data.capacity = newCap;
+}
+
+export function addObjectInstance(ctx: RendererContext, def: ObjectDef, instance: ObjectInstance): void {
+    let data = ctx.instancedDefs.get(def.id);
+    if (!data) {
+        data = createInstancedDef(ctx.scene, def, 16);
+        ctx.instancedDefs.set(def.id, data);
+    }
+    let slot: number;
+    if (data.freeSlots.length > 0) {
+        slot = data.freeSlots.pop()!;
+    } else {
+        if (data.slots.size >= data.capacity) growInstancedDef(ctx.scene, data, def);
+        slot = data.slots.size;
+        for (const m of data.meshes) m.count = Math.max(m.count, slot + 1);
+    }
+    data.slots.set(instance.id, slot);
+    data.reverseSlots.set(slot, instance.id);
+    const mat = makeInstanceMatrix(instance);
+    for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.instanceMatrix.needsUpdate = true; }
+    const group = buildObjectGroup(def, instance);
+    group.visible = false;
+    ctx.scene.add(group);
+    ctx.objectGroups.set(instance.id, group);
+}
+
+export function removeObjectInstance(ctx: RendererContext, instanceId: string): void {
+    const group = ctx.objectGroups.get(instanceId);
+    if (group) { ctx.scene.remove(group); ctx.objectGroups.delete(instanceId); }
+    for (const [, data] of ctx.instancedDefs) {
+        const slot = data.slots.get(instanceId);
+        if (slot !== undefined) {
+            for (const m of data.meshes) { m.setMatrixAt(slot, _zeroScale); m.instanceMatrix.needsUpdate = true; }
+            data.slots.delete(instanceId);
+            data.reverseSlots.delete(slot);
+            data.freeSlots.push(slot);
+            break;
+        }
+    }
+}
+
+export function syncObjectToInstanced(ctx: RendererContext, instanceId: string): void {
+    const group = ctx.objectGroups.get(instanceId);
+    if (!group) return;
+    _iMat.compose(group.position, group.quaternion, group.scale);
+    for (const [, data] of ctx.instancedDefs) {
+        const slot = data.slots.get(instanceId);
+        if (slot !== undefined) {
+            for (const m of data.meshes) { m.setMatrixAt(slot, _iMat); m.instanceMatrix.needsUpdate = true; }
+            return;
+        }
+    }
+}
+
+export function setObjectSelected(ctx: RendererContext, instanceId: string, selected: boolean): void {
+    const group = ctx.objectGroups.get(instanceId);
+    if (!group) return;
+    if (selected) {
+        group.visible = true;
+        for (const [, data] of ctx.instancedDefs) {
+            const slot = data.slots.get(instanceId);
+            if (slot !== undefined) {
+                for (const m of data.meshes) { m.setMatrixAt(slot, _zeroScale); m.instanceMatrix.needsUpdate = true; }
+                return;
+            }
+        }
+    } else {
+        group.visible = false;
+        _iMat.compose(group.position, group.quaternion, group.scale);
+        for (const [, data] of ctx.instancedDefs) {
+            const slot = data.slots.get(instanceId);
+            if (slot !== undefined) {
+                for (const m of data.meshes) { m.setMatrixAt(slot, _iMat); m.instanceMatrix.needsUpdate = true; }
+                return;
+            }
+        }
+    }
+}
+
+export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instances: ObjectInstance[]): void {
+    const old = ctx.instancedDefs.get(def.id);
+    if (old) {
+        for (const m of old.meshes) { ctx.scene.remove(m); m.geometry.dispose(); }
+        ctx.instancedDefs.delete(def.id);
+    }
+    if (instances.length === 0) return;
+    const data = createInstancedDef(ctx.scene, def, Math.max(instances.length * 2 + 16, 16));
+    ctx.instancedDefs.set(def.id, data);
+    for (const inst of instances) {
+        const slot = data.slots.size;
+        data.slots.set(inst.id, slot);
+        data.reverseSlots.set(slot, inst.id);
+        const group = ctx.objectGroups.get(inst.id);
+        const mat = group?.visible ? _zeroScale : makeInstanceMatrix(inst);
+        for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.count = Math.max(m.count, slot + 1); }
+    }
+    for (const m of data.meshes) m.instanceMatrix.needsUpdate = true;
 }
 
 export function buildObjectGroup(def: ObjectDef, instance: ObjectInstance): THREE.Group {
@@ -433,6 +640,7 @@ export interface RendererContext {
     terrainSplatMap: THREE.DataTexture;
     regionOverlayTex: THREE.DataTexture;
     objectGroups: Map<string, THREE.Group>;
+    instancedDefs: Map<string, InstancedDefData>;
     ambientLight: THREE.AmbientLight;
     sunLight: THREE.DirectionalLight;
 }
@@ -457,7 +665,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     camera.position.set(0, 10, 20);
 
     // Create renderer first so applyLight/applySky can reference it
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -474,12 +682,33 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     updateRegionOverlay(regionOverlayTex, gameMap.terrain, gameMap.regions ?? []);
 
     const objectGroups = new Map<string, THREE.Group>();
+    const instancedDefs = new Map<string, InstancedDefData>();
+
+    // First pass: create InstancedDefData with correct capacity per def
+    for (const def of gameMap.objectDefs) {
+        const count = gameMap.objects.filter((o) => o.defId === def.id).length;
+        if (count === 0) continue;
+        instancedDefs.set(def.id, createInstancedDef(scene, def, count * 2 + 16));
+    }
+
+    // Second pass: fill instance matrices and create invisible proxy groups
     for (const instance of gameMap.objects) {
         const def = gameMap.objectDefs.find((d) => d.id === instance.defId);
         if (!def) continue;
         const group = buildObjectGroup(def, instance);
+        group.visible = false;
         scene.add(group);
         objectGroups.set(instance.id, group);
+
+        const data = instancedDefs.get(def.id)!;
+        const slot = data.slots.size;
+        data.slots.set(instance.id, slot);
+        data.reverseSlots.set(slot, instance.id);
+        const mat = makeInstanceMatrix(instance);
+        for (const m of data.meshes) { m.setMatrixAt(slot, mat); m.count = Math.max(m.count, slot + 1); }
+    }
+    for (const [, data] of instancedDefs) {
+        for (const m of data.meshes) m.instanceMatrix.needsUpdate = true;
     }
 
     const resizeObserver = new ResizeObserver(() => {
@@ -489,9 +718,32 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     });
     resizeObserver.observe(container);
 
-    return { scene, camera, renderer, terrainMesh, terrainSplatMap, regionOverlayTex, objectGroups, ambientLight, sunLight };
+    return { scene, camera, renderer, terrainMesh, terrainSplatMap, regionOverlayTex, objectGroups, instancedDefs, ambientLight, sunLight };
 }
 
 export function renderFrame(ctx: RendererContext): void {
+    const camPos = ctx.camera.position;
+    for (const [, data] of ctx.instancedDefs) {
+        for (let ci = 0; ci < data.meshes.length; ci++) {
+            const autoRot = data.compAutoRotate[ci];
+            if (autoRot === 'none') continue;
+            const mesh = data.meshes[ci]!;
+            for (const [, slot] of data.slots) {
+                mesh.getMatrixAt(slot, _iMat);
+                _iMat.decompose(_iPos, _iQuat, _iScl);
+                if (_iScl.lengthSq() < 1e-6) continue;
+                if (autoRot === 'billboard') {
+                    _iEuler.set(0, Math.atan2(camPos.x - _iPos.x, camPos.z - _iPos.z), 0);
+                    _iQuat.setFromEuler(_iEuler);
+                } else {
+                    _iLookAt.lookAt(_iPos, camPos, _iUp);
+                    _iQuat.setFromRotationMatrix(_iLookAt);
+                }
+                _iMat.compose(_iPos, _iQuat, _iScl);
+                mesh.setMatrixAt(slot, _iMat);
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+        }
+    }
     ctx.renderer.render(ctx.scene, ctx.camera);
 }
