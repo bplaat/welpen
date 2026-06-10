@@ -8,7 +8,7 @@ function clean() {
 function check_copyright() {
     echo "Checking copyright headers..."
     exit=0
-    for file in $(find . \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" \) ! -name "*.min.js" | grep -v node_modules | grep -v target); do
+    for file in $(find . \( -name "*.html" -o -name "*.js" -o -name "*.ts" -o -name "*.css" \) ! -name "*.min.js" | grep -v src-gen | grep -v node_modules | grep -v target); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1

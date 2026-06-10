@@ -21,6 +21,13 @@ import type {
     Sky,
     Terrain,
 } from './types.ts';
+import {
+    BUILTIN_DEF_SPAWN_ID,
+    BUILTIN_DEF_POINT_ID,
+    BUILTIN_DEF_CIRCLE_ID,
+    BUILTIN_DEF_SPLINE_ID,
+    BUILTIN_DEF_POLYGON_ID,
+} from './builtins.ts';
 
 // --- Terrain splatmap ---
 
@@ -613,6 +620,8 @@ export function syncObjectToInstanced(ctx: RendererContext, instanceId: string):
 export function setObjectSelected(ctx: RendererContext, instanceId: string, selected: boolean): void {
     const group = ctx.objectGroups.get(instanceId);
     if (!group) return;
+    // Built-in groups are always visible - selection box handles the visual feedback
+    if (group.userData['isBuiltin']) return;
     if (selected) {
         group.visible = true;
         for (const [, data] of ctx.instancedDefs) {
@@ -639,6 +648,117 @@ export function setObjectSelected(ctx: RendererContext, instanceId: string, sele
             }
         }
     }
+}
+
+// ---- Built-in placeholder objects ----
+
+const _builtinMatSpawn = new THREE.MeshBasicMaterial({ color: 0xffdd00, depthTest: false, depthWrite: false });
+const _builtinMatShape = new THREE.MeshBasicMaterial({ color: 0xff6600, depthTest: false, depthWrite: false });
+const _builtinLineMatShape = new THREE.LineBasicMaterial({ color: 0xff6600, depthTest: false, depthWrite: false });
+const _builtinFillMatPolygon = new THREE.MeshBasicMaterial({
+    color: 0xff6600,
+    transparent: true,
+    opacity: 0.18,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: false,
+});
+
+export function buildBuiltinGroup(instance: ObjectInstance): THREE.Group {
+    const group = new THREE.Group();
+    group.position.set(instance.position[0], instance.position[1], instance.position[2]);
+    group.userData['instanceId'] = instance.id;
+    group.userData['isBuiltin'] = true;
+
+    switch (instance.defId) {
+        case BUILTIN_DEF_SPAWN_ID: {
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.0, 8), _builtinMatSpawn);
+            shaft.position.y = 0.5;
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 8), _builtinMatSpawn);
+            cone.position.y = 1.25;
+            group.add(shaft, cone);
+            break;
+        }
+        case BUILTIN_DEF_POINT_ID: {
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), _builtinMatShape);
+            sphere.position.y = 0.3;
+            group.add(sphere);
+            break;
+        }
+        case BUILTIN_DEF_CIRCLE_ID: {
+            const radius = instance.radius ?? 5;
+            const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.1, 6, 48), _builtinMatShape);
+            torus.rotation.x = Math.PI / 2;
+            group.add(torus);
+            break;
+        }
+        case BUILTIN_DEF_SPLINE_ID: {
+            const pts = instance.points ?? [];
+            if (pts.length === 0) {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), _builtinMatShape);
+                sphere.position.y = 0.3;
+                group.add(sphere);
+            } else {
+                for (const pt of pts) {
+                    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), _builtinMatShape);
+                    sphere.position.set(pt[0], pt[1], pt[2]);
+                    group.add(sphere);
+                }
+                if (pts.length >= 2) {
+                    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
+                    const curveGeo = new THREE.BufferGeometry().setFromPoints(
+                        curve.getPoints(Math.max(pts.length * 8, 32))
+                    );
+                    group.add(new THREE.Line(curveGeo, _builtinLineMatShape));
+                }
+            }
+            break;
+        }
+        case BUILTIN_DEF_POLYGON_ID: {
+            const pts = instance.points ?? [];
+            if (pts.length === 0) {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), _builtinMatShape);
+                sphere.position.y = 0.3;
+                group.add(sphere);
+            } else {
+                for (const pt of pts) {
+                    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), _builtinMatShape);
+                    sphere.position.set(pt[0], pt[1], pt[2]);
+                    group.add(sphere);
+                }
+                const closedPts = [...pts, pts[0]!];
+                const outlineGeo = new THREE.BufferGeometry().setFromPoints(
+                    closedPts.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
+                );
+                group.add(new THREE.Line(outlineGeo, _builtinLineMatShape));
+                if (pts.length >= 3) {
+                    const verts = new Float32Array(pts.length * 3);
+                    for (let i = 0; i < pts.length; i++) {
+                        verts[i * 3] = pts[i]![0];
+                        verts[i * 3 + 1] = pts[i]![1];
+                        verts[i * 3 + 2] = pts[i]![2];
+                    }
+                    const idx: number[] = [];
+                    for (let i = 1; i < pts.length - 1; i++) idx.push(0, i, i + 1);
+                    const fillGeo = new THREE.BufferGeometry();
+                    fillGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+                    fillGeo.setIndex(idx);
+                    group.add(new THREE.Mesh(fillGeo, _builtinFillMatPolygon));
+                }
+            }
+            break;
+        }
+    }
+    group.traverse((child) => {
+        child.renderOrder = 1;
+    });
+    return group;
+}
+
+export function addBuiltinInstance(ctx: RendererContext, instance: ObjectInstance): void {
+    const group = buildBuiltinGroup(instance);
+    ctx.scene.add(group);
+    ctx.objectGroups.set(instance.id, group);
 }
 
 export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instances: ObjectInstance[]): void {

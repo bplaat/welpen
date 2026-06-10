@@ -339,6 +339,26 @@ body {
     accent-color: #5a9adf;
 }
 
+.add-points-note {
+    font-size: 11px;
+    color: #aaa;
+    background: #1e3a1e;
+    border: 1px solid #3a6a3a;
+    border-radius: 3px;
+    padding: 5px 7px;
+    margin-bottom: 8px;
+}
+
+.entity-id {
+    font-size: 10px;
+    font-family: monospace;
+    color: #4a4a4a;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .empty-msg {
     color: #444;
     text-align: center;

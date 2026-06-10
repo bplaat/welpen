@@ -1,0 +1,147 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+syntax = "proto3";
+
+message World {
+  bytes id = 1;
+  string name = 2;
+  Sky sky = 3;
+  Light light = 4;
+  Terrain terrain = 5;
+  repeated ObjectDef object_defs = 6;
+  repeated Region regions = 7;
+  repeated ObjectInstance objects = 8;
+}
+
+message Vec2 {
+  float x = 1;
+  float y = 2;
+}
+
+message Vec3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Sky {
+  string color = 1;
+  string texture = 2;
+}
+
+message Light {
+  string ambient_color = 1;
+  float ambient_intensity = 2;
+  string sun_color = 3;
+  float sun_intensity = 4;
+  Vec3 sun_position = 5;
+  bool shadows = 6;
+}
+
+message Terrain {
+  uint32 width = 1;
+  uint32 depth = 2;
+  float cell_size = 3;
+  // Raw little-endian Int16Array of width*depth elevation values, scaled by 100
+  // (0.01 unit precision, range +-327)
+  bytes heights = 4;
+  string texture = 5;
+  repeated TerrainLayer layers = 6;
+  // Per-layer blend weights quantized to 0-255 (Uint8Array, length =
+  // width*depth each)
+  repeated bytes layer_weights = 7;
+  // Region index per cell (Uint8Array, supports up to 255 regions)
+  bytes region_map = 8;
+}
+
+message TerrainLayer {
+  bytes id = 1;
+  string name = 2;
+  string texture = 3;
+  float repeat = 4;
+}
+
+message ObjectDef {
+  bytes id = 1;
+  string name = 2;
+  repeated Component components = 3;
+}
+
+message CubeComponent {
+  Vec3 position = 1;
+  Vec3 rotation = 2;
+  Vec3 size = 3;
+  string texture = 4;
+  bool transparent = 5;
+}
+
+message BillboardComponent {
+  Vec3 position = 1;
+  Vec2 size = 2;
+  string texture = 3;
+  bool transparent = 4;
+}
+
+message PlaneComponent {
+  Vec3 position = 1;
+  Vec3 rotation = 2;
+  Vec2 size = 3;
+  string texture = 4;
+  bool transparent = 5;
+}
+
+message CylinderComponent {
+  Vec3 position = 1;
+  Vec3 rotation = 2;
+  Vec3 size = 3;
+  string texture = 4;
+  bool transparent = 5;
+}
+
+message SphereComponent {
+  Vec3 position = 1;
+  Vec3 rotation = 2;
+  Vec3 size = 3;
+  string texture = 4;
+  bool transparent = 5;
+}
+
+message SpriteComponent {
+  Vec3 position = 1;
+  Vec2 size = 2;
+  string texture = 3;
+  bool transparent = 4;
+}
+
+message Component {
+  oneof kind {
+    CubeComponent cube = 1;
+    BillboardComponent billboard = 2;
+    PlaneComponent plane = 3;
+    CylinderComponent cylinder = 4;
+    SphereComponent sphere = 5;
+    SpriteComponent sprite = 6;
+  }
+}
+
+message Region {
+  bytes id = 1;
+  string name = 2;
+}
+
+message ObjectInstance {
+  bytes id = 1;
+  string name = 2;
+  bytes def_id = 3; // References ObjectDef.id or a BUILTIN_DEF_* hardcoded UUID
+                    // for built-in types
+  Vec3 position = 4;
+  Vec3 rotation = 5; // omitted when (0, 0, 0); used by regular object defs
+  Vec3 scale = 6;    // omitted when (1, 1, 1); used by regular object defs
+  float radius = 7;  // used by BUILTIN_DEF_CIRCLE
+  repeated Vec3 points = 8; // used by BUILTIN_DEF_SPLINE (control points) and
+                            // BUILTIN_DEF_POLYGON (vertices)
+}

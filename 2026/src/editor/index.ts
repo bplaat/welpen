@@ -17,6 +17,8 @@ import {
     getTerrainY,
     isAutoRotatedDef,
     addObjectInstance,
+    addBuiltinInstance,
+    buildBuiltinGroup,
     removeObjectInstance,
     syncObjectToInstanced,
     setObjectSelected,
@@ -26,6 +28,14 @@ import {
     updateRegionOverlay,
 } from '../renderer.ts';
 import { loadMap, saveMap, uploadTexture } from '../map.ts';
+import { generateId } from '../utils.ts';
+import {
+    BUILTIN_DEF_SPAWN_ID,
+    BUILTIN_DEF_POINT_ID,
+    BUILTIN_DEF_CIRCLE_ID,
+    BUILTIN_DEF_SPLINE_ID,
+    BUILTIN_DEF_POLYGON_ID,
+} from '../builtins.ts';
 import type {
     BillboardComponent,
     CubeComponent,
@@ -65,6 +75,58 @@ type Tab = 'world' | 'defs';
 type MapTool = 'select' | 'place' | 'raise' | 'lower' | 'level' | 'paint' | 'region' | 'scatter' | 'erase';
 type TransformMode = 'translate' | 'rotate' | 'scale';
 
+// ---- Built-in helpers ----
+
+const BUILTIN_IDS = [
+    BUILTIN_DEF_SPAWN_ID,
+    BUILTIN_DEF_POINT_ID,
+    BUILTIN_DEF_CIRCLE_ID,
+    BUILTIN_DEF_SPLINE_ID,
+    BUILTIN_DEF_POLYGON_ID,
+] as const;
+
+const BUILTIN_LABELS: Record<string, string> = {
+    [BUILTIN_DEF_SPAWN_ID]: 'Spawn Point',
+    [BUILTIN_DEF_POINT_ID]: 'Point',
+    [BUILTIN_DEF_CIRCLE_ID]: 'Circle',
+    [BUILTIN_DEF_SPLINE_ID]: 'Spline',
+    [BUILTIN_DEF_POLYGON_ID]: 'Polygon',
+};
+
+const BUILTIN_ICONS: Record<string, string> = {
+    [BUILTIN_DEF_SPAWN_ID]: '🚩',
+    [BUILTIN_DEF_POINT_ID]: '📍',
+    [BUILTIN_DEF_CIRCLE_ID]: '◯',
+    [BUILTIN_DEF_SPLINE_ID]: '〰',
+    [BUILTIN_DEF_POLYGON_ID]: '⬡',
+};
+
+function isBuiltinId(defId: string): boolean {
+    return (BUILTIN_IDS as readonly string[]).includes(defId);
+}
+
+function buildBuiltinGhostGroup(defId: string): THREE.Group {
+    const dummy: ObjectInstance = {
+        id: '__ghost__',
+        defId,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+    };
+    const group = buildBuiltinGroup(dummy);
+    group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            const mat = (child.material as THREE.Material).clone();
+            (mat as THREE.MeshBasicMaterial).transparent = true;
+            (mat as THREE.MeshBasicMaterial).opacity = 0.45;
+            (mat as THREE.MeshBasicMaterial).depthWrite = false;
+            child.material = mat;
+        }
+    });
+    group.visible = false;
+    return group;
+}
+
 let activeTab: Tab = 'world';
 let currentTool: MapTool = 'select';
 let transformMode: TransformMode = 'translate';
@@ -94,7 +156,9 @@ const keysDown = new Set<string>();
 
 // Scatter tool
 let scatterAccum = 0;
-let scatterIdSeq = 0;
+
+// Add-points mode for spline/polygon placement
+let addPointsInstanceId: string | null = null;
 
 // Stats counter
 let statsFrames = 0;
@@ -178,6 +242,26 @@ function selectInput(value: string, options: string[], onChange: (v: string) => 
     }
     sel.addEventListener('change', () => onChange(sel.value));
     return sel;
+}
+
+function selectInputLabeled(
+    value: string,
+    options: { value: string; label: string }[],
+    onChange: (v: string) => void
+): HTMLSelectElement {
+    const sel = el<HTMLSelectElement>('select');
+    for (const opt of options) {
+        const o = el<HTMLOptionElement>('option', '', opt.label);
+        o.value = opt.value;
+        o.selected = opt.value === value;
+        sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+}
+
+function makeEntityId(id: string): HTMLElement {
+    return el('div', 'entity-id', id);
 }
 
 function textureField(label: string, value: string, onChange: (v: string) => void): HTMLElement {
@@ -295,9 +379,12 @@ function getObjectHit(e: MouseEvent): THREE.Group | null {
     raycaster.setFromCamera(getNDC(e), ctx.camera);
     const targets: THREE.Object3D[] = [];
     for (const [, data] of ctx.instancedDefs) targets.push(...data.meshes);
+    for (const [, group] of ctx.objectGroups) {
+        if (group.userData['isBuiltin']) targets.push(group);
+    }
     if (mapSel && mapSel !== 'settings') {
         const sel = ctx.objectGroups.get(mapSel);
-        if (sel?.visible) targets.push(sel);
+        if (sel && !sel.userData['isBuiltin'] && sel.visible) targets.push(sel);
     }
     const hits = raycaster.intersectObjects(targets, true);
     if (hits.length === 0) return null;
@@ -357,6 +444,11 @@ function setGhostDef(defId: string | null): void {
         ghostGroup = null;
     }
     if (!defId) return;
+    if (isBuiltinId(defId)) {
+        ghostGroup = buildBuiltinGhostGroup(defId);
+        ctx.scene.add(ghostGroup);
+        return;
+    }
     const def = map.objectDefs.find((d) => d.id === defId);
     if (!def) return;
     ghostGroup = buildGhostGroup(def);
@@ -366,7 +458,18 @@ function setGhostDef(defId: string | null): void {
 
 // ---- World editor selection ----
 
+function finishAddPoints(): void {
+    addPointsInstanceId = null;
+    setGhostDef(null);
+    renderLeftPanel();
+    renderRightPanel();
+}
+
 function selectMapItem(sel: 'settings' | string | null): void {
+    if (addPointsInstanceId && sel !== addPointsInstanceId) {
+        addPointsInstanceId = null;
+        setGhostDef(null);
+    }
     if (mapSel && mapSel !== 'settings') setObjectSelected(ctx, mapSel, false);
     mapSel = sel;
     if (sel && sel !== 'settings') {
@@ -579,12 +682,22 @@ function listItem(icon: string, label: string, selected: boolean, onClick: () =>
 }
 
 function renderMapLeftPanel(body: HTMLElement): void {
-    if (currentTool === 'place' || currentTool === 'scatter') {
-        body.appendChild(el('div', 'list-section', 'Choose definition to place:'));
+    if ((currentTool === 'place' || currentTool === 'scatter') && !addPointsInstanceId) {
+        body.appendChild(el('div', 'list-section', 'Object Defs'));
         for (const def of map.objectDefs) {
             body.appendChild(
-                listItem('\uD83D\uDCE6', def.name, placeDefId === def.id, () => {
+                listItem('\uD83D\uDCE6', def.name ?? '', placeDefId === def.id, () => {
                     placeDefId = def.id;
+                    if (currentTool === 'place') setGhostDef(placeDefId);
+                    renderLeftPanel();
+                })
+            );
+        }
+        body.appendChild(el('div', 'list-section', 'Built-in Types'));
+        for (const id of BUILTIN_IDS) {
+            body.appendChild(
+                listItem(BUILTIN_ICONS[id]!, BUILTIN_LABELS[id]!, placeDefId === id, () => {
+                    placeDefId = id;
                     if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
                 })
@@ -600,7 +713,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
         const region = map.regions[i]!;
         const idx = i;
         body.appendChild(
-            listItem('\uD83D\uDDFA', region.name, currentTool === 'region' && regionSelIndex === idx, () => {
+            listItem('\uD83D\uDDFA', region.name ?? '', currentTool === 'region' && regionSelIndex === idx, () => {
                 regionSelIndex = idx;
                 setTool('region');
             })
@@ -608,7 +721,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
     }
     const addRegionBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Region');
     addRegionBtn.addEventListener('click', () => {
-        map.regions.push({ id: `region_${Date.now()}`, name: 'New Region' });
+        map.regions.push({ id: generateId(), name: 'New Region' });
         regionSelIndex = map.regions.length - 1;
         setTool('region');
     });
@@ -617,10 +730,12 @@ function renderMapLeftPanel(body: HTMLElement): void {
     if (map.objects.length > 0) {
         body.appendChild(el('div', 'list-section', 'Placed Objects'));
         for (const inst of map.objects) {
-            const def = map.objectDefs.find((d) => d.id === inst.defId);
-            body.appendChild(
-                listItem('\uD83D\uDCE6', def?.name ?? inst.defId, mapSel === inst.id, () => selectMapItem(inst.id))
-            );
+            const icon = BUILTIN_ICONS[inst.defId] ?? '\uD83D\uDCE6';
+            const label =
+                BUILTIN_LABELS[inst.defId] ??
+                map.objectDefs.find((d) => d.id === inst.defId)?.name ??
+                (inst.name || inst.defId);
+            body.appendChild(listItem(icon, label, mapSel === inst.id, () => selectMapItem(inst.id)));
         }
     }
 }
@@ -628,7 +743,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
 function renderDefsLeftPanel(body: HTMLElement): void {
     for (const def of map.objectDefs) {
         body.appendChild(
-            listItem('\uD83D\uDCE6', def.name, defsSelDefId === def.id, () => {
+            listItem('\uD83D\uDCE6', def.name ?? '', defsSelDefId === def.id, () => {
                 defsSelDefId = def.id;
                 defsSelCompIdx = -1;
                 defsTransformControls.detach();
@@ -640,7 +755,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
     }
     const addBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Definition');
     addBtn.addEventListener('click', () => {
-        const id = `def_${Date.now()}`;
+        const id = generateId();
         map.objectDefs.push({ id, name: 'New Object', components: [] });
         defsSelDefId = id;
         defsSelCompIdx = -1;
@@ -654,7 +769,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
     if (defsSelDefId) {
         const def = map.objectDefs.find((d) => d.id === defsSelDefId);
         if (def) {
-            body.appendChild(el('div', 'list-section', `"${def.name}" components`));
+            body.appendChild(el('div', 'list-section', `"${def.name ?? ''}" components`));
             def.components.forEach((comp, i) => {
                 const icons: Record<string, string> = {
                     cube: '\uD83E\uDDE0',
@@ -788,12 +903,13 @@ function renderRegionPanel(body: HTMLElement): void {
         body.appendChild(el('div', 'empty-msg', 'Select or add a region'));
         return;
     }
+    body.appendChild(makeEntityId(region.id));
     body.appendChild(makeSection('Region'));
     body.appendChild(
         makeField(
             'Name',
-            textInput(region.name, (v) => {
-                region.name = v;
+            textInput(region.name ?? '', (v) => {
+                region.name = v || undefined;
                 renderLeftPanel();
             })
         )
@@ -880,7 +996,7 @@ function renderMapSettings(body: HTMLElement): void {
             setTool('paint');
             renderRightPanel();
         });
-        const label = el('span', 'list-label', layer.name);
+        const label = el('span', 'list-label', layer.name ?? '');
         const editBtn = el<HTMLButtonElement>('button', 'tb-btn');
         editBtn.textContent = 'Edit';
         editBtn.style.padding = '2px 7px';
@@ -1048,13 +1164,19 @@ function renderMapSettings(body: HTMLElement): void {
 }
 
 function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void {
+    if (isBuiltinId(instance.defId)) {
+        renderBuiltinInstancePanel(body, instance);
+        return;
+    }
+
+    body.appendChild(makeEntityId(instance.id));
     body.appendChild(makeSection('Instance'));
     body.appendChild(
         makeField(
             'Type',
-            selectInput(
+            selectInputLabeled(
                 instance.defId,
-                map.objectDefs.map((d) => d.id),
+                map.objectDefs.map((d) => ({ value: d.id, label: d.name ?? '' })),
                 (v) => {
                     instance.defId = v;
                     const newDef = map.objectDefs.find((d) => d.id === v);
@@ -1131,6 +1253,74 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
     );
 }
 
+function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance): void {
+    body.appendChild(makeEntityId(instance.id));
+    body.appendChild(makeSection(BUILTIN_LABELS[instance.defId] ?? 'Built-in'));
+
+    if (instance.id === addPointsInstanceId) {
+        body.appendChild(el('div', 'add-points-note', 'Click terrain to add points. Right-click or Esc to finish.'));
+        body.appendChild(actionBtn('Finish Shape', 'primary', () => finishAddPoints()));
+    } else if (instance.defId === BUILTIN_DEF_SPLINE_ID || instance.defId === BUILTIN_DEF_POLYGON_ID) {
+        body.appendChild(
+            actionBtn('Add Point', 'primary', () => {
+                addPointsInstanceId = instance.id;
+                setGhostDef(BUILTIN_DEF_POINT_ID);
+                renderLeftPanel();
+                renderRightPanel();
+            })
+        );
+    }
+
+    body.appendChild(
+        vec3Field(
+            'Position',
+            instance.position,
+            (i, v) => {
+                instance.position[i] = v;
+                const g = ctx.objectGroups.get(instance.id);
+                if (g) {
+                    g.position.setComponent(i, v);
+                    selectionBox.setFromObject(g);
+                }
+            },
+            ['bi-pos-x', 'bi-pos-y', 'bi-pos-z']
+        )
+    );
+
+    if (instance.defId === BUILTIN_DEF_CIRCLE_ID) {
+        body.appendChild(
+            makeField(
+                'Radius',
+                numInput(
+                    instance.radius ?? 5,
+                    (v) => {
+                        instance.radius = Math.max(0.1, v);
+                        // Rebuild the group to reflect new radius
+                        removeObjectInstance(ctx, instance.id);
+                        addBuiltinInstance(ctx, instance);
+                        if (mapSel === instance.id) {
+                            const g = ctx.objectGroups.get(instance.id);
+                            if (g) {
+                                selectionBox.setFromObject(g);
+                                transformControls.attach(g);
+                            }
+                        }
+                    },
+                    0.5
+                )
+            )
+        );
+    }
+
+    body.appendChild(
+        actionBtn('Delete', 'danger', () => {
+            removeObjectInstance(ctx, instance.id);
+            map.objects = map.objects.filter((o) => o.id !== instance.id);
+            clearSelection();
+        })
+    );
+}
+
 function renderDefsRightPanel(body: HTMLElement): void {
     if (!defsSelDefId) {
         body.appendChild(el('div', 'empty-msg', 'Select a definition'));
@@ -1139,26 +1329,13 @@ function renderDefsRightPanel(body: HTMLElement): void {
     const def = map.objectDefs.find((d) => d.id === defsSelDefId);
     if (!def) return;
 
+    body.appendChild(makeEntityId(def.id));
     body.appendChild(makeSection('Definition'));
     body.appendChild(
         makeField(
             'Name',
-            textInput(def.name, (v) => {
-                def.name = v;
-                renderLeftPanel();
-            })
-        )
-    );
-    body.appendChild(
-        makeField(
-            'ID',
-            textInput(def.id, (v) => {
-                const old = def.id;
-                def.id = v;
-                map.objects.forEach((o) => {
-                    if (o.defId === old) o.defId = v;
-                });
-                defsSelDefId = v;
+            textInput(def.name ?? '', (v) => {
+                def.name = v || undefined;
                 renderLeftPanel();
             })
         )
@@ -1358,7 +1535,7 @@ function openLayerDialog(layerIdx: number): void {
             map.terrain.layers[layerIdx]!.repeat = repeat;
         } else {
             const newIndex = map.terrain.layers.length;
-            map.terrain.layers.push({ name, texture, repeat });
+            map.terrain.layers.push({ id: generateId(), name, texture, repeat });
             map.terrain.layerWeights[newIndex] = new Array(map.terrain.width * map.terrain.depth).fill(0) as number[];
             paintLayerIndex = newIndex;
         }
@@ -1404,6 +1581,7 @@ function openLayerDialog(layerIdx: number): void {
 }
 
 function setTool(tool: MapTool): void {
+    if (addPointsInstanceId) addPointsInstanceId = null;
     currentTool = tool;
     (['select', 'place', 'raise', 'lower', 'level', 'paint', 'scatter', 'erase'] as const).forEach((t) => {
         $(`btn-${t}`).classList.toggle('active', t === tool);
@@ -1493,6 +1671,32 @@ function setupViewportEvents(): void {
         if (e.button === 0) isMouseDown = true;
         if (e.button === 2) isRightMouseDown = true;
         if (activeTab !== 'world') return;
+        if (e.button === 2 && addPointsInstanceId) {
+            finishAddPoints();
+            return;
+        }
+        if (e.button === 0 && addPointsInstanceId) {
+            const instance = map.objects.find((o) => o.id === addPointsInstanceId);
+            if (instance) {
+                const hit = getTerrainHit(e);
+                if (!hit) return;
+                const pts = (instance.points ??= []);
+                pts.push([hit.x - instance.position[0], hit.y - instance.position[1], hit.z - instance.position[2]] as [
+                    number,
+                    number,
+                    number
+                ]);
+                removeObjectInstance(ctx, instance.id);
+                addBuiltinInstance(ctx, instance);
+                const g = ctx.objectGroups.get(instance.id);
+                if (g && mapSel === instance.id) {
+                    selectionBox.setFromObject(g);
+                    transformControls.attach(g);
+                }
+                renderRightPanel();
+            }
+            return;
+        }
         if (e.button === 0 && currentTool === 'select') {
             if (transformControls.dragging) return;
             const group = getObjectHit(e);
@@ -1503,20 +1707,34 @@ function setupViewportEvents(): void {
             }
         } else if (e.button === 0 && currentTool === 'place') {
             if (!placeDefId) return;
-            const def = map.objectDefs.find((d) => d.id === placeDefId);
-            if (!def) return;
             const hit = getTerrainHit(e);
             if (!hit) return;
+            const hx = Math.round(hit.x * 10) / 10;
+            const hz = Math.round(hit.z * 10) / 10;
             const instance: ObjectInstance = {
-                id: `obj_${Date.now()}`,
+                id: generateId(),
                 defId: placeDefId,
-                position: [Math.round(hit.x * 10) / 10, hit.y, Math.round(hit.z * 10) / 10],
+                position: [hx, hit.y, hz],
                 rotation: [0, 0, 0],
                 scale: [1, 1, 1],
             };
             map.objects.push(instance);
-            addObjectInstance(ctx, def, instance);
-            // Stay in place mode - do not switch to select
+            if (isBuiltinId(placeDefId)) {
+                if (placeDefId === BUILTIN_DEF_SPLINE_ID || placeDefId === BUILTIN_DEF_POLYGON_ID) {
+                    instance.points = [[0, 0, 0]];
+                    addBuiltinInstance(ctx, instance);
+                    setTool('select');
+                    addPointsInstanceId = instance.id;
+                    selectMapItem(instance.id);
+                    setGhostDef(BUILTIN_DEF_POINT_ID);
+                    return;
+                }
+                addBuiltinInstance(ctx, instance);
+            } else {
+                const def = map.objectDefs.find((d) => d.id === placeDefId);
+                if (!def) return;
+                addObjectInstance(ctx, def, instance);
+            }
             renderLeftPanel();
         } else if (currentTool === 'raise' || currentTool === 'lower') {
             if (e.button !== 0) return;
@@ -1608,7 +1826,7 @@ function setupToolbarEvents(): void {
     });
 
     $('btn-add-def').addEventListener('click', () => {
-        const id = `def_${Date.now()}`;
+        const id = generateId();
         map.objectDefs.push({ id, name: 'New Object', components: [] });
         defsSelDefId = id;
         defsSelCompIdx = -1;
@@ -1746,7 +1964,9 @@ function setupToolbarEvents(): void {
         keysDown.add(e.code);
         e.preventDefault();
         if (activeTab === 'world' && !e.repeat) {
-            if (e.code === 'Delete' && mapSel && mapSel !== 'settings') {
+            if (e.code === 'Escape' && addPointsInstanceId) {
+                finishAddPoints();
+            } else if (e.code === 'Delete' && mapSel && mapSel !== 'settings') {
                 removeObjectInstance(ctx, mapSel);
                 map.objects = map.objects.filter((o) => o.id !== mapSel);
                 clearSelection();
@@ -1766,6 +1986,9 @@ async function main(): Promise<void> {
 
     const viewport = $('viewport');
     ctx = createRenderer(viewport, map);
+    for (const inst of map.objects) {
+        if (isBuiltinId(inst.defId)) addBuiltinInstance(ctx, inst);
+    }
     ctx.camera.position.set(0, 25, 40);
 
     // --- World editor controls ---
@@ -1999,7 +2222,7 @@ async function main(): Promise<void> {
                 terrainEditor.applyRegionBrush(brushHit, paintIdx, brushSize);
                 updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
             }
-            if (isMouseDown && currentTool === 'scatter' && brushHit && placeDefId) {
+            if (isMouseDown && currentTool === 'scatter' && brushHit && placeDefId && !isBuiltinId(placeDefId)) {
                 const def = map.objectDefs.find((d) => d.id === placeDefId);
                 if (def) {
                     scatterAccum += delta * brushSize * 0.5;
@@ -2012,7 +2235,7 @@ async function main(): Promise<void> {
                         const y = getTerrainY(map.terrain, x, z);
                         const rotY = isAutoRotatedDef(def) ? 0 : Math.random() * Math.PI * 2;
                         const instance: ObjectInstance = {
-                            id: `obj_${Date.now()}_${scatterIdSeq++}`,
+                            id: generateId(),
                             defId: placeDefId,
                             position: [Math.round(x * 10) / 10, y, Math.round(z * 10) / 10],
                             rotation: [0, rotY, 0],

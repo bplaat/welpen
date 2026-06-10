@@ -8,6 +8,7 @@ import './game.css';
 import { createRenderer, renderFrame } from './renderer.ts';
 import { ThirdPersonControls } from './controls.ts';
 import { loadMap } from './map.ts';
+import { BUILTIN_DEF_SPAWN_ID } from './builtins.ts';
 import { loadCharacter } from './character.ts';
 
 async function main(): Promise<void> {
@@ -19,7 +20,14 @@ async function main(): Promise<void> {
     const ctx = createRenderer(document.body, map);
     ctx.scene.add(character.group);
 
-    const controls = new ThirdPersonControls(ctx.camera, ctx.renderer.domElement, map.terrain, character);
+    const spawnPoint = map.objects.find((o) => o.defId === BUILTIN_DEF_SPAWN_ID);
+    const controls = new ThirdPersonControls(
+        ctx.camera,
+        ctx.renderer.domElement,
+        map.terrain,
+        character,
+        spawnPoint?.position
+    );
 
     // --- Touch controls ---
     const joystickZone = document.getElementById('joystick-zone') as HTMLElement;
@@ -184,7 +192,7 @@ async function main(): Promise<void> {
             currentRegionIdx = newRegionIdx;
             clearTimeout(regionHideTimeoutId);
             if (newRegionIdx >= 0 && newRegionIdx < map.regions.length) {
-                regionEl.textContent = map.regions[newRegionIdx]!.name;
+                regionEl.textContent = map.regions[newRegionIdx]!.name ?? '';
                 regionEl.style.opacity = '1';
                 regionHideTimeoutId = window.setTimeout(() => {
                     regionEl.style.opacity = '0';

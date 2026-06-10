@@ -4,15 +4,16 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "clean": "rm -rf target",
+        "clean": "rm -rf target src-gen",
         "dev": "vite",
-        "build": "tsc && vite build"
+        "build": "vite build && tsc"
     },
     "dependencies": {
         "three": "^0.177.0"
     },
     "devDependencies": {
         "@types/three": "^0.177.0",
+        "ts-proto": "^2.7.0",
         "typescript": "~5.8.3",
         "vite": "^7.0.0"
     }

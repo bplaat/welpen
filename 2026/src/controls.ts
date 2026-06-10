@@ -41,6 +41,7 @@ export class ThirdPersonControls {
     private jumping = false;
     private prevVerticalVel = 0;
     private playerPos = new THREE.Vector3(0, 0, 20);
+    private readonly defaultPos: THREE.Vector3;
     private facingYaw = 0;
     private targetFacingYaw = 0;
 
@@ -60,12 +61,14 @@ export class ThirdPersonControls {
         camera: THREE.PerspectiveCamera,
         domElement: HTMLElement,
         terrain: Terrain,
-        character: CharacterController
+        character: CharacterController,
+        spawnPos?: [number, number, number]
     ) {
         this.camera = camera;
         this.domElement = domElement;
         this.terrain = terrain;
         this.character = character;
+        this.defaultPos = spawnPos ? new THREE.Vector3(spawnPos[0], 0, spawnPos[2]) : new THREE.Vector3(0, 0, 20);
         this.loadFromStorage();
         this.playerPos.y = getTerrainY(this.terrain, this.playerPos.x, this.playerPos.z) + PLAYER_HEIGHT;
         this.facingYaw = this.yaw;
@@ -80,15 +83,19 @@ export class ThirdPersonControls {
     private loadFromStorage(): void {
         try {
             const raw = localStorage.getItem(LS_KEY);
-            if (!raw) return;
-            const s = JSON.parse(raw) as { x: number; z: number; yaw: number; pitch: number };
-            this.playerPos.x = s.x;
-            this.playerPos.z = s.z;
-            this.yaw = s.yaw;
-            this.pitch = s.pitch;
+            if (raw) {
+                const s = JSON.parse(raw) as { x: number; z: number; yaw: number; pitch: number };
+                this.playerPos.x = s.x;
+                this.playerPos.z = s.z;
+                this.yaw = s.yaw;
+                this.pitch = s.pitch;
+                return;
+            }
         } catch {
             /* ignore */
         }
+        this.playerPos.x = this.defaultPos.x;
+        this.playerPos.z = this.defaultPos.z;
     }
 
     private saveToStorage(): void {

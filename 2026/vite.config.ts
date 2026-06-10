@@ -4,13 +4,32 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { execSync } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { writeFile, mkdir, cp } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 
+function protoPlugin(): Plugin {
+    return {
+        name: 'proto',
+        buildStart() {
+            execSync('mkdir -p src-gen');
+            execSync(
+                'protoc' +
+                    ' --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto' +
+                    ' --ts_proto_out=./src-gen' +
+                    ' --ts_proto_opt=esModuleInterop=true,forceLong=number,useOptionals=messages,env=browser,outputIndex=false' +
+                    ' --proto_path=src src/map.proto',
+                { stdio: 'inherit' }
+            );
+        },
+    };
+}
+
 const MIME: Record<string, string> = {
+    '.bin': 'application/octet-stream',
     '.json': 'application/json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -112,5 +131,5 @@ export default defineConfig({
             input: { game: 'index.html' },
         },
     },
-    plugins: [serveDataPlugin(), writeFilePlugin(), copyDataPlugin()],
+    plugins: [protoPlugin(), serveDataPlugin(), writeFilePlugin(), copyDataPlugin()],
 });

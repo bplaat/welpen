@@ -1,0 +1,12 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+// Hardcoded UUIDv7 identifiers for built-in def types
+export const BUILTIN_DEF_SPAWN_ID = '019768f0-0000-7000-8000-000000000000';
+export const BUILTIN_DEF_POINT_ID = '019768f0-0000-7000-8000-000000000001';
+export const BUILTIN_DEF_CIRCLE_ID = '019768f0-0000-7000-8000-000000000002';
+export const BUILTIN_DEF_SPLINE_ID = '019768f0-0000-7000-8000-000000000003';
+export const BUILTIN_DEF_POLYGON_ID = '019768f0-0000-7000-8000-000000000004';

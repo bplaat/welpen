@@ -65,28 +65,32 @@ export type Component =
     | SpriteComponent;
 
 export interface ObjectDef {
-    id: string;
-    name: string;
+    id: string; // UUIDv7 string
+    name?: string;
     components: Component[];
 }
 
 export interface ObjectInstance {
-    id: string;
+    id: string; // UUIDv7 string
+    name?: string;
     defId: string;
     position: [number, number, number];
-    rotation: [number, number, number];
-    scale: [number, number, number];
+    rotation: [number, number, number]; // used by regular object defs
+    scale: [number, number, number]; // used by regular object defs
+    radius?: number; // used by BUILTIN_DEF_CIRCLE
+    points?: [number, number, number][]; // used by BUILTIN_DEF_SPLINE / BUILTIN_DEF_POLYGON
 }
 
 export interface TerrainLayer {
-    name: string;
+    id: string; // UUIDv7 string
+    name?: string;
     texture: string;
     repeat: number;
 }
 
 export interface Region {
-    id: string;
-    name: string;
+    id: string; // UUIDv7 string
+    name?: string;
 }
 
 export interface Terrain {
@@ -115,7 +119,8 @@ export interface Light {
 }
 
 export interface GameMap {
-    name: string;
+    id: string; // UUIDv7 string (world ID)
+    name?: string;
     sky: Sky;
     light: Light;
     terrain: Terrain;
