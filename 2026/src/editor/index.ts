@@ -247,7 +247,7 @@ function selectInput(value: string, options: string[], onChange: (v: string) => 
 function selectInputLabeled(
     value: string,
     options: { value: string; label: string }[],
-    onChange: (v: string) => void
+    onChange: (v: string) => void,
 ): HTMLSelectElement {
     const sel = el<HTMLSelectElement>('select');
     for (const opt of options) {
@@ -297,7 +297,7 @@ function vec3Field(
     label: string,
     vals: [number, number, number],
     onChange: (i: number, v: number) => void,
-    attr?: [string, string, string]
+    attr?: [string, string, string],
 ): HTMLElement {
     const d = el('div', 'field');
     d.appendChild(el('label', '', label));
@@ -316,7 +316,7 @@ function vec2Field(
     label: string,
     vals: [number, number],
     onChange: (i: number, v: number) => void,
-    attr?: [string, string]
+    attr?: [string, string],
 ): HTMLElement {
     const d = el('div', 'field');
     d.appendChild(el('label', '', label));
@@ -345,7 +345,7 @@ function getNDC(e: MouseEvent): THREE.Vector2 {
     const rect = ctx.renderer.domElement.getBoundingClientRect();
     return new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
 }
 
@@ -618,7 +618,7 @@ function rebuildDefObjects(def: ObjectDef): void {
     rebuildDefInstanced(
         ctx,
         def,
-        map.objects.filter((o) => o.defId === def.id)
+        map.objects.filter((o) => o.defId === def.id),
     );
     if (prevSel) setObjectSelected(ctx, prevSel, true);
     if (defsSelDefId === def.id) rebuildDefsPreview();
@@ -690,7 +690,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
                     placeDefId = def.id;
                     if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
-                })
+                }),
             );
         }
         body.appendChild(el('div', 'list-section', 'Built-in Types'));
@@ -700,7 +700,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
                     placeDefId = id;
                     if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
-                })
+                }),
             );
         }
         return;
@@ -716,7 +716,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
             listItem('\uD83D\uDDFA', region.name ?? '', currentTool === 'region' && regionSelIndex === idx, () => {
                 regionSelIndex = idx;
                 setTool('region');
-            })
+            }),
         );
     }
     const addRegionBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Region');
@@ -750,7 +750,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                 renderLeftPanel();
                 renderRightPanel();
                 rebuildDefsPreview();
-            })
+            }),
         );
     }
     const addBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Definition');
@@ -782,7 +782,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                 body.appendChild(
                     listItem(icons[comp.type] ?? '?', `${comp.type} ${i + 1}`, defsSelCompIdx === i, () => {
                         selectDefsComp(i);
-                    })
+                    }),
                 );
             });
             const addCube = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Cube');
@@ -911,8 +911,8 @@ function renderRegionPanel(body: HTMLElement): void {
             textInput(region.name ?? '', (v) => {
                 region.name = v || undefined;
                 renderLeftPanel();
-            })
-        )
+            }),
+        ),
     );
     body.appendChild(
         actionBtn('Delete Region', 'danger', () => {
@@ -928,7 +928,7 @@ function renderRegionPanel(body: HTMLElement): void {
             if (map.regions.length === 0) setTool('select');
             else renderLeftPanel();
             renderRightPanel();
-        })
+        }),
     );
 }
 
@@ -947,9 +947,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newW = Math.max(2, Math.min(256, Math.round(v)));
                 },
-                1
-            )
-        )
+                1,
+            ),
+        ),
     );
     body.appendChild(
         makeField(
@@ -959,9 +959,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newD = Math.max(2, Math.min(256, Math.round(v)));
                 },
-                1
-            )
-        )
+                1,
+            ),
+        ),
     );
     body.appendChild(
         makeField(
@@ -971,9 +971,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newCS = Math.max(0.5, v);
                 },
-                0.5
-            )
-        )
+                0.5,
+            ),
+        ),
     );
     body.appendChild(
         textureField('Ground Texture', map.terrain.texture, (v) => {
@@ -982,7 +982,7 @@ function renderMapSettings(body: HTMLElement): void {
             terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
             regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
-        })
+        }),
     );
 
     body.appendChild(makeSection('Terrain Layers'));
@@ -1084,7 +1084,7 @@ function renderMapSettings(body: HTMLElement): void {
             contourMesh.geometry = ctx.terrainMesh.geometry;
             updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
             regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
-        })
+        }),
     );
 
     body.appendChild(makeSection('Sky'));
@@ -1094,14 +1094,14 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.sky.color, (v) => {
                 map.sky.color = v;
                 applySky(ctx.scene, map.sky);
-            })
-        )
+            }),
+        ),
     );
     body.appendChild(
         textureField('Texture (equirectangular)', map.sky.texture ?? '', (v) => {
             map.sky.texture = v.trim() || null;
             applySky(ctx.scene, map.sky);
-        })
+        }),
     );
 
     body.appendChild(makeSection('Light'));
@@ -1111,8 +1111,8 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.light.ambientColor, (v) => {
                 map.light.ambientColor = v;
                 applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-            })
-        )
+            }),
+        ),
     );
     body.appendChild(
         makeField(
@@ -1123,9 +1123,9 @@ function renderMapSettings(body: HTMLElement): void {
                     map.light.ambientIntensity = Math.max(0, v);
                     applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
                 },
-                0.1
-            )
-        )
+                0.1,
+            ),
+        ),
     );
     body.appendChild(
         makeField(
@@ -1133,8 +1133,8 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.light.sunColor, (v) => {
                 map.light.sunColor = v;
                 applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-            })
-        )
+            }),
+        ),
     );
     body.appendChild(
         makeField(
@@ -1145,21 +1145,21 @@ function renderMapSettings(body: HTMLElement): void {
                     map.light.sunIntensity = Math.max(0, v);
                     applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
                 },
-                0.1
-            )
-        )
+                0.1,
+            ),
+        ),
     );
     body.appendChild(
         vec3Field('Sun Position', map.light.sunPosition, (i, v) => {
             map.light.sunPosition[i] = v;
             applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-        })
+        }),
     );
     body.appendChild(
         checkboxInput(map.light.shadows, 'Shadows', (v) => {
             map.light.shadows = v;
             applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-        })
+        }),
     );
 }
 
@@ -1188,9 +1188,9 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                         if (wasSelected) setObjectSelected(ctx, instance.id, true);
                     }
                     renderLeftPanel();
-                }
-            )
-        )
+                },
+            ),
+        ),
     );
 
     body.appendChild(
@@ -1206,8 +1206,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['pos-x', 'pos-y', 'pos-z']
-        )
+            ['pos-x', 'pos-y', 'pos-z'],
+        ),
     );
 
     body.appendChild(
@@ -1223,8 +1223,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['rot-x', 'rot-y', 'rot-z']
-        )
+            ['rot-x', 'rot-y', 'rot-z'],
+        ),
     );
 
     body.appendChild(
@@ -1240,8 +1240,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['scl-x', 'scl-y', 'scl-z']
-        )
+            ['scl-x', 'scl-y', 'scl-z'],
+        ),
     );
 
     body.appendChild(
@@ -1249,7 +1249,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
             removeObjectInstance(ctx, instance.id);
             map.objects = map.objects.filter((o) => o.id !== instance.id);
             clearSelection();
-        })
+        }),
     );
 }
 
@@ -1267,7 +1267,7 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                 setGhostDef(BUILTIN_DEF_POINT_ID);
                 renderLeftPanel();
                 renderRightPanel();
-            })
+            }),
         );
     }
 
@@ -1283,8 +1283,8 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                     selectionBox.setFromObject(g);
                 }
             },
-            ['bi-pos-x', 'bi-pos-y', 'bi-pos-z']
-        )
+            ['bi-pos-x', 'bi-pos-y', 'bi-pos-z'],
+        ),
     );
 
     if (instance.defId === BUILTIN_DEF_CIRCLE_ID) {
@@ -1306,9 +1306,9 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                             }
                         }
                     },
-                    0.5
-                )
-            )
+                    0.5,
+                ),
+            ),
         );
     }
 
@@ -1317,7 +1317,7 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
             removeObjectInstance(ctx, instance.id);
             map.objects = map.objects.filter((o) => o.id !== instance.id);
             clearSelection();
-        })
+        }),
     );
 }
 
@@ -1337,8 +1337,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
             textInput(def.name ?? '', (v) => {
                 def.name = v || undefined;
                 renderLeftPanel();
-            })
-        )
+            }),
+        ),
     );
 
     if (defsSelCompIdx < 0 || defsSelCompIdx >= def.components.length) return;
@@ -1415,8 +1415,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
                     };
                 rebuildDefObjects(def);
                 selectDefsComp(defsSelCompIdx);
-            })
-        )
+            }),
+        ),
     );
 
     body.appendChild(
@@ -1428,8 +1428,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
                 const mesh = getDefsCompMesh();
                 if (mesh) mesh.position.setComponent(i, v);
             },
-            ['comp-pos-x', 'comp-pos-y', 'comp-pos-z']
-        )
+            ['comp-pos-x', 'comp-pos-y', 'comp-pos-z'],
+        ),
     );
 
     const has3Size = comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere';
@@ -1447,8 +1447,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
                     const mesh = getDefsCompMesh();
                     if (mesh) mesh.scale.setComponent(i, Math.max(0.01, v));
                 },
-                ['comp-sz-x', 'comp-sz-y', 'comp-sz-z']
-            )
+                ['comp-sz-x', 'comp-sz-y', 'comp-sz-z'],
+            ),
         );
     } else if (has2Size) {
         const c = comp as PlaneComponent | BillboardComponent | SpriteComponent;
@@ -1461,8 +1461,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
                     const mesh = getDefsCompMesh();
                     if (mesh) mesh.scale.setComponent(i, Math.max(0.01, v));
                 },
-                ['comp-sz-x', 'comp-sz-y']
-            )
+                ['comp-sz-x', 'comp-sz-y'],
+            ),
         );
     }
 
@@ -1477,8 +1477,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
                     const mesh = getDefsCompMesh();
                     if (mesh) mesh.rotation.set(c.rotation[0], c.rotation[1], c.rotation[2]);
                 },
-                ['comp-rot-x', 'comp-rot-y', 'comp-rot-z']
-            )
+                ['comp-rot-x', 'comp-rot-y', 'comp-rot-z'],
+            ),
         );
     }
 
@@ -1486,13 +1486,13 @@ function renderDefsRightPanel(body: HTMLElement): void {
         textureField('Texture', comp.texture, (v) => {
             comp.texture = v;
             rebuildDefObjects(def);
-        })
+        }),
     );
     body.appendChild(
         checkboxInput(comp.transparent, 'Transparent', (v) => {
             comp.transparent = v;
             rebuildDefObjects(def);
-        })
+        }),
     );
     body.appendChild(
         actionBtn('Delete Component', 'danger', () => {
@@ -1500,7 +1500,7 @@ function renderDefsRightPanel(body: HTMLElement): void {
             const newIdx = Math.min(defsSelCompIdx, def.components.length - 1);
             rebuildDefObjects(def);
             selectDefsComp(newIdx);
-        })
+        }),
     );
 }
 
@@ -1517,9 +1517,9 @@ function openLayerDialog(layerIdx: number): void {
 
     const isEdit = layerIdx >= 0;
     titleEl.textContent = isEdit ? 'Edit Layer' : 'Add Layer';
-    nameInp.value = isEdit ? map.terrain.layers[layerIdx]?.name ?? '' : '';
-    texInp.value = isEdit ? map.terrain.layers[layerIdx]?.texture ?? '' : map.terrain.texture;
-    repeatInp.value = String(isEdit ? map.terrain.layers[layerIdx]?.repeat ?? 1 : 1);
+    nameInp.value = isEdit ? (map.terrain.layers[layerIdx]?.name ?? '') : '';
+    texInp.value = isEdit ? (map.terrain.layers[layerIdx]?.texture ?? '') : map.terrain.texture;
+    repeatInp.value = String(isEdit ? (map.terrain.layers[layerIdx]?.repeat ?? 1) : 1);
 
     const save = $('layer-dialog-save');
     const cancel = $('layer-dialog-cancel');
@@ -1684,7 +1684,7 @@ function setupViewportEvents(): void {
                 pts.push([hit.x - instance.position[0], hit.y - instance.position[1], hit.z - instance.position[2]] as [
                     number,
                     number,
-                    number
+                    number,
                 ]);
                 removeObjectInstance(ctx, instance.id);
                 addBuiltinInstance(ctx, instance);
@@ -1997,6 +1997,9 @@ async function main(): Promise<void> {
     orbitControls.target.set(0, 0, 0);
     orbitControls.enableDamping = true;
     orbitControls.dampingFactor = 0.08;
+    const mapW = map.terrain.width * map.terrain.cellSize;
+    const mapD = map.terrain.depth * map.terrain.cellSize;
+    orbitControls.maxDistance = Math.sqrt(mapW * mapW + mapD * mapD);
 
     // Restore editor camera from localStorage
     const editorCamLS = 'wildwest_editor_cam';
@@ -2022,7 +2025,7 @@ async function main(): Promise<void> {
                 tx: orbitControls.target.x,
                 ty: orbitControls.target.y,
                 tz: orbitControls.target.z,
-            })
+            }),
         );
     });
 
@@ -2050,7 +2053,7 @@ async function main(): Promise<void> {
 
     const regionSplatScale = new THREE.Vector2(
         1 / ((map.terrain.width - 1) * map.terrain.cellSize),
-        1 / ((map.terrain.depth - 1) * map.terrain.cellSize)
+        1 / ((map.terrain.depth - 1) * map.terrain.cellSize),
     );
     regionOverlayMesh = new THREE.Mesh(
         ctx.terrainMesh.geometry,
@@ -2082,7 +2085,7 @@ async function main(): Promise<void> {
                     gl_FragColor = col;
                 }
             `,
-        })
+        }),
     );
     regionOverlayMesh.visible = false;
     ctx.scene.add(regionOverlayMesh);
@@ -2114,7 +2117,7 @@ async function main(): Promise<void> {
                 gl_FragColor = vec4(1.0, 0.85, 0.0, 0.85);
             }
         `,
-        })
+        }),
     );
     contourMesh.visible = false;
     ctx.scene.add(contourMesh);
@@ -2200,7 +2203,7 @@ async function main(): Promise<void> {
                     delta,
                     map.objects,
                     ctx.objectGroups,
-                    terrainSync
+                    terrainSync,
                 );
             }
             if (isMouseDown && currentTool === 'level' && brushHit) {
@@ -2211,7 +2214,7 @@ async function main(): Promise<void> {
                     delta,
                     map.objects,
                     ctx.objectGroups,
-                    terrainSync
+                    terrainSync,
                 );
             }
             if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
