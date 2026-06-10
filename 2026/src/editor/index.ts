@@ -166,8 +166,7 @@ let scatterIntensity = 5;
 let addPointsInstanceId: string | null = null;
 
 // Stats counter
-let statsFrames = 0;
-let statsTime = 0;
+let smoothFps = 60;
 
 // Scratch vectors for WASD camera movement (avoid per-frame allocations)
 const _wasdForward = new THREE.Vector3();
@@ -2552,18 +2551,12 @@ async function main(): Promise<void> {
             ctx.renderer.render(defsScene, defsCamera);
         }
 
-        statsFrames++;
-        statsTime += delta;
-        if (statsTime >= 0.5) {
-            const fps = Math.round(statsFrames / statsTime);
-            const calls = ctx.renderer.info.render.calls;
-            const tris = ctx.renderer.info.render.triangles;
-            ($('stats') as HTMLSpanElement).textContent = `${fps} fps | ${calls} draw | ${
-                tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
-            } tris`;
-            statsFrames = 0;
-            statsTime = 0;
-        }
+        if (delta > 0) smoothFps += (1 / delta - smoothFps) * (1 - Math.exp(-delta * 4));
+        const calls = ctx.renderer.info.render.calls;
+        const tris = ctx.renderer.info.render.triangles;
+        ($('stats') as HTMLSpanElement).textContent = `${Math.round(smoothFps)} fps | ${calls} draw | ${
+            tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
+        } tris`;
     }
     requestAnimationFrame(() => {
         const loading = document.getElementById('loading');

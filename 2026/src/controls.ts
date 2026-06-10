@@ -230,6 +230,11 @@ export class ThirdPersonControls {
                 this.targetFacingYaw = Math.atan2(this._move.x, this._move.z);
             }
 
+            const halfW = ((this.terrain.width - 1) * this.terrain.cellSize) / 2;
+            const halfD = ((this.terrain.depth - 1) * this.terrain.cellSize) / 2;
+            this.playerPos.x = Math.max(-halfW, Math.min(halfW, this.playerPos.x));
+            this.playerPos.z = Math.max(-halfD, Math.min(halfD, this.playerPos.z));
+
             if (!this.jumping) this.character.setState(boost ? 'run' : 'walk');
         } else {
             if (!this.jumping) this.character.setState('idle');

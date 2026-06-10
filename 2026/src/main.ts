@@ -163,8 +163,7 @@ async function main(): Promise<void> {
 
     // --- HUD: stats ---
     const statsEl = document.getElementById('stats') as HTMLElement;
-    let statsFrames = 0;
-    let statsTime = 0;
+    let smoothFps = 60;
 
     // --- Render loop ---
     let lastTime = performance.now();
@@ -204,18 +203,12 @@ async function main(): Promise<void> {
 
         renderFrame(ctx);
 
-        statsFrames++;
-        statsTime += delta;
-        if (statsTime >= 0.5) {
-            const fps = Math.round(statsFrames / statsTime);
-            const calls = ctx.renderer.info.render.calls;
-            const tris = ctx.renderer.info.render.triangles;
-            statsEl.textContent = `${fps} fps | ${calls} draw | ${
-                tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
-            } tris`;
-            statsFrames = 0;
-            statsTime = 0;
-        }
+        if (delta > 0) smoothFps += (1 / delta - smoothFps) * (1 - Math.exp(-delta * 4));
+        const calls = ctx.renderer.info.render.calls;
+        const tris = ctx.renderer.info.render.triangles;
+        statsEl.textContent = `${Math.round(smoothFps)} fps | ${calls} draw | ${
+            tris >= 1000 ? (tris / 1000).toFixed(0) + 'k' : tris
+        } tris`;
     }
     requestAnimationFrame(() => {
         const loading = document.getElementById('loading');

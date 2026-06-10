@@ -154,7 +154,7 @@ function loadFbxModel(path: string): Promise<THREE.Group> {
                 resolve(obj.clone(true));
             },
             undefined,
-            reject
+            reject,
         );
     });
     fbxPending.set(path, p);
@@ -195,7 +195,7 @@ export function applyLight(
     ambientLight: THREE.AmbientLight,
     sunLight: THREE.DirectionalLight,
     renderer: THREE.WebGLRenderer,
-    light: Light
+    light: Light,
 ): void {
     ambientLight.color.set(light.ambientColor);
     ambientLight.intensity = light.ambientIntensity;
@@ -259,7 +259,7 @@ export function buildTerrainMesh(terrain: Terrain, splatMap: THREE.DataTexture):
         shader.vertexShader = `varying vec2 vSplatUv;\nuniform vec2 splatScale;\n` + shader.vertexShader;
         shader.vertexShader = shader.vertexShader.replace(
             `#include <begin_vertex>`,
-            `#include <begin_vertex>\nvSplatUv = transformed.xz * splatScale + 0.5;`
+            `#include <begin_vertex>\nvSplatUv = transformed.xz * splatScale + 0.5;`,
         );
 
         shader.fragmentShader =
@@ -284,7 +284,7 @@ uniform vec2 layerRepeat3;
     diffuseColor = mix(diffuseColor, texture2D(layerMap1, vSplatUv * layerRepeat1), splat.g);
     diffuseColor = mix(diffuseColor, texture2D(layerMap2, vSplatUv * layerRepeat2), splat.b);
     diffuseColor = mix(diffuseColor, texture2D(layerMap3, vSplatUv * layerRepeat3), splat.a);
-}`
+}`,
         );
     };
 
@@ -342,7 +342,7 @@ function buildComponentMesh(
         | CylinderComponent
         | SphereComponent
         | SpriteComponent
-        | FbxModelComponent
+        | FbxModelComponent,
 ): THREE.Object3D {
     if (comp.type === 'cube') {
         const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
@@ -541,18 +541,18 @@ function compLocalMatrix(comp: Component): THREE.Matrix4 {
         scl = new THREE.Vector3(comp.scale[0], comp.scale[1], 1);
     } else if (comp.type === 'sphere') {
         rot = new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]),
         );
         scl = new THREE.Vector3(comp.scale[0], comp.scale[0], comp.scale[0]);
     } else if (comp.type === 'plane') {
         rot = new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]),
         );
         scl = new THREE.Vector3(comp.scale[0], comp.scale[1], 1);
     } else {
         // cube, cylinder, fbx
         rot = new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+            new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2]),
         );
         scl = new THREE.Vector3(comp.scale[0], comp.scale[1], comp.scale[2]);
     }
@@ -562,7 +562,7 @@ function compLocalMatrix(comp: Component): THREE.Matrix4 {
 function buildInstancedMeshForComp(
     comp: Exclude<Component, FbxModelComponent>,
     capacity: number,
-    defId: string
+    defId: string,
 ): THREE.InstancedMesh {
     let geo: THREE.BufferGeometry;
     let mat: THREE.Material;
@@ -619,9 +619,9 @@ function makeInstanceMatrix(instance: ObjectInstance): THREE.Matrix4 {
     return new THREE.Matrix4().compose(
         new THREE.Vector3(instance.position[0], instance.position[1], instance.position[2]),
         new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0)
+            new THREE.Euler(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0),
         ),
-        new THREE.Vector3(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1)
+        new THREE.Vector3(instance.scale?.[0] ?? 1, instance.scale?.[1] ?? 1, instance.scale?.[2] ?? 1),
     );
 }
 
@@ -635,7 +635,7 @@ function createInstancedDef(scene: THREE.Scene, def: ObjectDef, capacity: number
     return {
         meshes,
         compAutoRotate: nonFbxComps.map((c) =>
-            c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none'
+            c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none',
         ),
         slots: new Map(),
         reverseSlots: new Map(),
@@ -822,7 +822,7 @@ export function buildBuiltinGroup(instance: ObjectInstance): THREE.Group {
                 if (pts.length >= 2) {
                     const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
                     const curveGeo = new THREE.BufferGeometry().setFromPoints(
-                        curve.getPoints(Math.max(pts.length * 8, 32))
+                        curve.getPoints(Math.max(pts.length * 8, 32)),
                     );
                     group.add(new THREE.Line(curveGeo, _builtinLineMatShape));
                 }
@@ -843,7 +843,7 @@ export function buildBuiltinGroup(instance: ObjectInstance): THREE.Group {
                 }
                 const closedPts = [...pts, pts[0]!];
                 const outlineGeo = new THREE.BufferGeometry().setFromPoints(
-                    closedPts.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
+                    closedPts.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
                 );
                 group.add(new THREE.Line(outlineGeo, _builtinLineMatShape));
                 if (pts.length >= 3) {
@@ -965,7 +965,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     // At a full terrain extent the character (~2 units) would only occupy ~8 shadow pixels.
     const shadowExtent = Math.min(
         80,
-        Math.max(gameMap.terrain.width, gameMap.terrain.depth) * gameMap.terrain.cellSize * 0.6
+        Math.max(gameMap.terrain.width, gameMap.terrain.depth) * gameMap.terrain.cellSize * 0.6,
     );
     sunLight.shadow.camera.near = 0.5;
     sunLight.shadow.camera.far = shadowExtent * 4;
