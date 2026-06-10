@@ -127,6 +127,22 @@ body {
     accent-color: #7aaded;
 }
 
+/* Scatter intensity control */
+#scatter-controls {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    color: #aaa;
+    font-size: 12px;
+}
+#scatter-controls.visible {
+    display: flex;
+}
+#scatter-intensity {
+    width: 60px;
+    accent-color: #7aaded;
+}
+
 /* Main 3-panel layout */
 #main {
     display: flex;

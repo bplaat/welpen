@@ -5,11 +5,13 @@
  */
 
 import * as THREE from 'three';
+import { fbxLoader } from './fbx.ts';
 import type {
     BillboardComponent,
     Component,
     CubeComponent,
     CylinderComponent,
+    FbxModelComponent,
     GameMap,
     Light,
     ObjectDef,
@@ -110,20 +112,66 @@ export function updateRegionOverlay(tex: THREE.DataTexture, terrain: Terrain, re
 const textureCache = new Map<string, THREE.Texture>();
 const textureLoader = new THREE.TextureLoader();
 
-function loadTexture(path: string): THREE.Texture {
-    let tex = textureCache.get(path);
+function loadTexture(path: string, repeatX = 1, repeatY = 1): THREE.Texture {
+    const key = repeatX !== 1 || repeatY !== 1 ? `${path}@${repeatX}x${repeatY}` : path;
+    let tex = textureCache.get(key);
     if (!tex) {
         tex = textureLoader.load(path);
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.magFilter = THREE.NearestFilter;
         tex.minFilter = THREE.NearestMipmapLinearFilter;
-        textureCache.set(path, tex);
+        if (repeatX !== 1 || repeatY !== 1) {
+            tex.repeat.set(repeatX, repeatY);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        }
+        textureCache.set(key, tex);
     }
     return tex;
 }
 
 export function invalidateTexture(path: string): void {
-    textureCache.delete(path);
+    for (const key of textureCache.keys()) {
+        if (key === path || key.startsWith(`${path}@`)) textureCache.delete(key);
+    }
+}
+
+// --- FBX model cache ---
+
+const fbxCache = new Map<string, THREE.Group>();
+const fbxPending = new Map<string, Promise<THREE.Group>>();
+
+function loadFbxModel(path: string): Promise<THREE.Group> {
+    const cached = fbxCache.get(path);
+    if (cached) return Promise.resolve(cached.clone(true));
+    const pending = fbxPending.get(path);
+    if (pending) return pending.then((g) => g.clone(true));
+    const p = new Promise<THREE.Group>((resolve, reject) => {
+        fbxLoader.load(
+            path,
+            (obj) => {
+                fbxCache.set(path, obj);
+                fbxPending.delete(path);
+                resolve(obj.clone(true));
+            },
+            undefined,
+            reject
+        );
+    });
+    fbxPending.set(path, p);
+    return p;
+}
+
+export function hasFbxComponent(def: ObjectDef): boolean {
+    return def.components.some((c) => c.type === 'fbx');
+}
+
+export function waitForGroupLoads(group: THREE.Group): Promise<void> {
+    const promises: Promise<void>[] = [];
+    group.traverse((obj) => {
+        const p = obj.userData['fbxLoadPromise'] as Promise<void> | undefined;
+        if (p) promises.push(p);
+    });
+    return Promise.all(promises).then(() => undefined);
 }
 
 // --- Sky ---
@@ -153,7 +201,12 @@ export function applyLight(
     ambientLight.intensity = light.ambientIntensity;
     sunLight.color.set(light.sunColor);
     sunLight.intensity = light.sunIntensity;
+    sunLight.shadow.intensity = 1;
     sunLight.position.set(light.sunPosition[0], light.sunPosition[1], light.sunPosition[2]);
+    // Store sun offset so renderFrame can translate it with the camera while keeping the same direction
+    sunLight.userData['sunOffsetX'] = light.sunPosition[0];
+    sunLight.userData['sunOffsetY'] = light.sunPosition[1];
+    sunLight.userData['sunOffsetZ'] = light.sunPosition[2];
     sunLight.castShadow = light.shadows;
     renderer.shadowMap.enabled = light.shadows;
 }
@@ -173,7 +226,7 @@ export function buildTerrainMesh(terrain: Terrain, splatMap: THREE.DataTexture):
     geo.computeVertexNormals();
 
     const tex = loadTexture(terrain.texture);
-    tex.repeat.set(width / 4, depth / 4);
+    tex.repeat.set((width / 4) * terrain.repeatX, (depth / 4) * terrain.repeatY);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
 
     const dummyData = new Uint8Array([0, 0, 0, 255]);
@@ -197,8 +250,9 @@ export function buildTerrainMesh(terrain: Terrain, splatMap: THREE.DataTexture):
         shader.uniforms['splatScale'] = { value: splatScale };
         for (let i = 0; i < 4; i++) {
             shader.uniforms[`layerMap${i}`] = { value: layerTextures[i] };
-            const r = terrain.layers[i]?.repeat ?? 1;
-            shader.uniforms[`layerRepeat${i}`] = { value: new THREE.Vector2((width / 4) * r, (depth / 4) * r) };
+            const rx = terrain.layers[i]?.repeatX ?? 1;
+            const ry = terrain.layers[i]?.repeatY ?? 1;
+            shader.uniforms[`layerRepeat${i}`] = { value: new THREE.Vector2((width / 4) * rx, (depth / 4) * ry) };
         }
 
         // Derive splatmap UV from world XZ position (avoids PlaneGeometry UV flip issues)
@@ -281,10 +335,17 @@ export function rebuildTerrain(ctx: RendererContext, terrain: Terrain): void {
 // --- Object instances ---
 
 function buildComponentMesh(
-    comp: CubeComponent | BillboardComponent | PlaneComponent | CylinderComponent | SphereComponent | SpriteComponent
+    comp:
+        | CubeComponent
+        | BillboardComponent
+        | PlaneComponent
+        | CylinderComponent
+        | SphereComponent
+        | SpriteComponent
+        | FbxModelComponent
 ): THREE.Object3D {
     if (comp.type === 'cube') {
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.BoxGeometry(1, 1, 1);
         // alphaMap intentionally omitted: the PNG's own alpha channel handles transparency via alphaTest
         const mat = new THREE.MeshLambertMaterial({
@@ -295,7 +356,7 @@ function buildComponentMesh(
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
         mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], comp.size[2]);
+        mesh.scale.set(comp.scale[0], comp.scale[1], comp.scale[2]);
         mesh.castShadow = true;
         if (comp.transparent) {
             mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
@@ -306,7 +367,7 @@ function buildComponentMesh(
         }
         return mesh;
     } else if (comp.type === 'plane') {
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.PlaneGeometry(1, 1);
         const mat = new THREE.MeshLambertMaterial({
             map: tex,
@@ -317,7 +378,7 @@ function buildComponentMesh(
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
         mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], 1);
+        mesh.scale.set(comp.scale[0], comp.scale[1], 1);
         mesh.castShadow = true;
         if (comp.transparent) {
             mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
@@ -328,7 +389,7 @@ function buildComponentMesh(
         }
         return mesh;
     } else if (comp.type === 'cylinder') {
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
         const mat = new THREE.MeshLambertMaterial({
             map: tex,
@@ -338,11 +399,11 @@ function buildComponentMesh(
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
         mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], comp.size[2]);
+        mesh.scale.set(comp.scale[0], comp.scale[1], comp.scale[2]);
         mesh.castShadow = true;
         return mesh;
     } else if (comp.type === 'sphere') {
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.SphereGeometry(0.5, 16, 12);
         const mat = new THREE.MeshLambertMaterial({
             map: tex,
@@ -352,12 +413,12 @@ function buildComponentMesh(
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
         mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], comp.size[2]);
+        mesh.scale.set(comp.scale[0], comp.scale[1], comp.scale[2]);
         mesh.castShadow = true;
         return mesh;
     } else if (comp.type === 'sprite') {
         // Sprite: fully spherical camera facing (all axes)
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.PlaneGeometry(1, 1);
         const mat = new THREE.MeshLambertMaterial({
             map: tex,
@@ -366,20 +427,60 @@ function buildComponentMesh(
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], 1);
+        mesh.scale.set(comp.scale[0], comp.scale[1], 1);
         mesh.castShadow = true;
         mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
             depthPacking: THREE.RGBADepthPacking,
             alphaMap: tex,
             alphaTest: comp.transparent ? 0.5 : 0,
+            side: THREE.DoubleSide,
         });
         mesh.onBeforeRender = (_r, _s, camera) => {
+            // Skip shadow pass (OrthographicCamera) - keep the orientation from the last main pass
+            if (!(camera instanceof THREE.PerspectiveCamera)) return;
             mesh.lookAt(camera.position);
         };
         return mesh;
+    } else if (comp.type === 'fbx') {
+        const container = new THREE.Group();
+        container.position.set(comp.position[0], comp.position[1], comp.position[2]);
+        container.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2]);
+        container.scale.set(comp.scale[0], comp.scale[1], comp.scale[2]);
+        if (comp.model) {
+            const loadPromise = loadFbxModel(comp.model)
+                .then((fbxGroup) => {
+                    if (comp.texture) {
+                        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
+                        fbxGroup.traverse((child) => {
+                            if (child instanceof THREE.Mesh) {
+                                child.material = new THREE.MeshLambertMaterial({ map: tex });
+                                child.castShadow = true;
+                            }
+                        });
+                    } else {
+                        fbxGroup.traverse((child) => {
+                            if (child instanceof THREE.Mesh) child.castShadow = true;
+                        });
+                    }
+                    container.add(fbxGroup);
+                    // Compute and cache world-space bbox on the instance group for fast ray pre-filtering
+                    const instGroup = container.parent;
+                    if (instGroup) {
+                        instGroup.updateWorldMatrix(true, true);
+                        const bbox = instGroup.userData['bbox'] as THREE.Box3 | undefined;
+                        if (bbox) bbox.setFromObject(instGroup);
+                        else instGroup.userData['bbox'] = new THREE.Box3().setFromObject(instGroup);
+                    }
+                })
+                .catch(() => {
+                    /* model not found, leave container empty */
+                });
+            container.userData['fbxLoadPromise'] = loadPromise;
+        }
+        return container;
     } else {
         // Billboard: cylindrical Y-axis facing (stays upright, only yaws toward camera)
-        const tex = loadTexture(comp.texture);
+        const tex = loadTexture(comp.texture, comp.repeatX, comp.repeatY);
         const geo = new THREE.PlaneGeometry(1, 1);
         const mat = new THREE.MeshLambertMaterial({
             map: tex,
@@ -388,14 +489,17 @@ function buildComponentMesh(
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(comp.position[0], comp.position[1], comp.position[2]);
-        mesh.scale.set(comp.size[0], comp.size[1], 1);
+        mesh.scale.set(comp.scale[0], comp.scale[1], 1);
         mesh.castShadow = true;
         mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
             depthPacking: THREE.RGBADepthPacking,
             alphaMap: tex,
             alphaTest: comp.transparent ? 0.5 : 0,
+            side: THREE.DoubleSide,
         });
         mesh.onBeforeRender = (_r, _s, camera) => {
+            // Skip shadow pass (OrthographicCamera) - keep the orientation from the last main pass
+            if (!(camera instanceof THREE.PerspectiveCamera)) return;
             mesh.getWorldPosition(_bbWorldPos);
             mesh.rotation.y = Math.atan2(camera.position.x - _bbWorldPos.x, camera.position.z - _bbWorldPos.z);
         };
@@ -434,40 +538,45 @@ function compLocalMatrix(comp: Component): THREE.Matrix4 {
     let scl: THREE.Vector3;
     if (comp.type === 'billboard' || comp.type === 'sprite') {
         rot = new THREE.Quaternion();
-        scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
+        scl = new THREE.Vector3(comp.scale[0], comp.scale[1], 1);
     } else if (comp.type === 'sphere') {
         rot = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
         );
-        scl = new THREE.Vector3(comp.size[0], comp.size[0], comp.size[0]);
+        scl = new THREE.Vector3(comp.scale[0], comp.scale[0], comp.scale[0]);
     } else if (comp.type === 'plane') {
         rot = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
         );
-        scl = new THREE.Vector3(comp.size[0], comp.size[1], 1);
+        scl = new THREE.Vector3(comp.scale[0], comp.scale[1], 1);
     } else {
+        // cube, cylinder, fbx
         rot = new THREE.Quaternion().setFromEuler(
             new THREE.Euler(comp.rotation[0], comp.rotation[1], comp.rotation[2])
         );
-        scl = new THREE.Vector3(comp.size[0], comp.size[1], comp.size[2]);
+        scl = new THREE.Vector3(comp.scale[0], comp.scale[1], comp.scale[2]);
     }
     return new THREE.Matrix4().compose(pos, rot, scl);
 }
 
-function buildInstancedMeshForComp(comp: Component, capacity: number, defId: string): THREE.InstancedMesh {
+function buildInstancedMeshForComp(
+    comp: Exclude<Component, FbxModelComponent>,
+    capacity: number,
+    defId: string
+): THREE.InstancedMesh {
     let geo: THREE.BufferGeometry;
     let mat: THREE.Material;
     if (comp.type === 'cube') {
         geo = new THREE.BoxGeometry(1, 1, 1);
         mat = new THREE.MeshLambertMaterial({
-            map: loadTexture(comp.texture),
+            map: loadTexture(comp.texture, comp.repeatX, comp.repeatY),
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
         });
     } else if (comp.type === 'plane') {
         geo = new THREE.PlaneGeometry(1, 1);
         mat = new THREE.MeshLambertMaterial({
-            map: loadTexture(comp.texture),
+            map: loadTexture(comp.texture, comp.repeatX, comp.repeatY),
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
             side: THREE.DoubleSide,
@@ -475,23 +584,24 @@ function buildInstancedMeshForComp(comp: Component, capacity: number, defId: str
     } else if (comp.type === 'cylinder') {
         geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
         mat = new THREE.MeshLambertMaterial({
-            map: loadTexture(comp.texture),
+            map: loadTexture(comp.texture, comp.repeatX, comp.repeatY),
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
         });
     } else if (comp.type === 'sphere') {
         geo = new THREE.SphereGeometry(0.5, 16, 12);
         mat = new THREE.MeshLambertMaterial({
-            map: loadTexture(comp.texture),
+            map: loadTexture(comp.texture, comp.repeatX, comp.repeatY),
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
         });
     } else {
         geo = new THREE.PlaneGeometry(1, 1);
         mat = new THREE.MeshLambertMaterial({
-            map: loadTexture(comp.texture),
+            map: loadTexture(comp.texture, comp.repeatX, comp.repeatY),
             transparent: comp.transparent,
             alphaTest: comp.transparent ? 0.5 : 0,
+            side: THREE.DoubleSide,
         });
     }
     geo.applyMatrix4(compLocalMatrix(comp));
@@ -516,14 +626,15 @@ function makeInstanceMatrix(instance: ObjectInstance): THREE.Matrix4 {
 }
 
 function createInstancedDef(scene: THREE.Scene, def: ObjectDef, capacity: number): InstancedDefData {
-    const meshes = def.components.map((comp) => {
+    const nonFbxComps = def.components.filter((c) => c.type !== 'fbx');
+    const meshes = nonFbxComps.map((comp) => {
         const m = buildInstancedMeshForComp(comp, capacity, def.id);
         scene.add(m);
         return m;
     });
     return {
         meshes,
-        compAutoRotate: def.components.map((c) =>
+        compAutoRotate: nonFbxComps.map((c) =>
             c.type === 'billboard' ? 'billboard' : c.type === 'sprite' ? 'sprite' : 'none'
         ),
         slots: new Map(),
@@ -535,9 +646,10 @@ function createInstancedDef(scene: THREE.Scene, def: ObjectDef, capacity: number
 
 function growInstancedDef(scene: THREE.Scene, data: InstancedDefData, def: ObjectDef): void {
     const newCap = data.capacity * 2 + 16;
+    const nonFbxComps = def.components.filter((c) => c.type !== 'fbx');
     for (let ci = 0; ci < data.meshes.length; ci++) {
         const old = data.meshes[ci]!;
-        const n = buildInstancedMeshForComp(def.components[ci]!, newCap, def.id);
+        const n = buildInstancedMeshForComp(nonFbxComps[ci]!, newCap, def.id);
         const tmp = new THREE.Matrix4();
         for (let s = 0; s < data.capacity; s++) {
             old.getMatrixAt(s, tmp);
@@ -554,28 +666,31 @@ function growInstancedDef(scene: THREE.Scene, data: InstancedDefData, def: Objec
 }
 
 export function addObjectInstance(ctx: RendererContext, def: ObjectDef, instance: ObjectInstance): void {
-    let data = ctx.instancedDefs.get(def.id);
-    if (!data) {
-        data = createInstancedDef(ctx.scene, def, 16);
-        ctx.instancedDefs.set(def.id, data);
-    }
-    let slot: number;
-    if (data.freeSlots.length > 0) {
-        slot = data.freeSlots.pop()!;
-    } else {
-        if (data.slots.size >= data.capacity) growInstancedDef(ctx.scene, data, def);
-        slot = data.slots.size;
-        for (const m of data.meshes) m.count = Math.max(m.count, slot + 1);
-    }
-    data.slots.set(instance.id, slot);
-    data.reverseSlots.set(slot, instance.id);
-    const mat = makeInstanceMatrix(instance);
-    for (const m of data.meshes) {
-        m.setMatrixAt(slot, mat);
-        m.instanceMatrix.needsUpdate = true;
+    const isFbx = hasFbxComponent(def);
+    if (!isFbx) {
+        let data = ctx.instancedDefs.get(def.id);
+        if (!data) {
+            data = createInstancedDef(ctx.scene, def, 16);
+            ctx.instancedDefs.set(def.id, data);
+        }
+        let slot: number;
+        if (data.freeSlots.length > 0) {
+            slot = data.freeSlots.pop()!;
+        } else {
+            if (data.slots.size >= data.capacity) growInstancedDef(ctx.scene, data, def);
+            slot = data.slots.size;
+            for (const m of data.meshes) m.count = Math.max(m.count, slot + 1);
+        }
+        data.slots.set(instance.id, slot);
+        data.reverseSlots.set(slot, instance.id);
+        const mat = makeInstanceMatrix(instance);
+        for (const m of data.meshes) {
+            m.setMatrixAt(slot, mat);
+            m.instanceMatrix.needsUpdate = true;
+        }
     }
     const group = buildObjectGroup(def, instance);
-    group.visible = false;
+    group.visible = isFbx;
     ctx.scene.add(group);
     ctx.objectGroups.set(instance.id, group);
 }
@@ -620,8 +735,8 @@ export function syncObjectToInstanced(ctx: RendererContext, instanceId: string):
 export function setObjectSelected(ctx: RendererContext, instanceId: string, selected: boolean): void {
     const group = ctx.objectGroups.get(instanceId);
     if (!group) return;
-    // Built-in groups are always visible - selection box handles the visual feedback
-    if (group.userData['isBuiltin']) return;
+    // Built-in and FBX groups are always visible - they have no instanced counterpart
+    if (group.userData['isBuiltin'] || group.userData['isFbx']) return;
     if (selected) {
         group.visible = true;
         for (const [, data] of ctx.instancedDefs) {
@@ -770,7 +885,7 @@ export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instan
         }
         ctx.instancedDefs.delete(def.id);
     }
-    if (instances.length === 0) return;
+    if (hasFbxComponent(def) || instances.length === 0) return;
     const data = createInstancedDef(ctx.scene, def, Math.max(instances.length * 2 + 16, 16));
     ctx.instancedDefs.set(def.id, data);
     for (const inst of instances) {
@@ -790,7 +905,7 @@ export function rebuildDefInstanced(ctx: RendererContext, def: ObjectDef, instan
 export function buildObjectGroup(def: ObjectDef, instance: ObjectInstance): THREE.Group {
     const group = new THREE.Group();
     group.name = instance.id;
-    group.userData = { instanceId: instance.id };
+    group.userData = { instanceId: instance.id, isFbx: hasFbxComponent(def) };
     group.position.set(instance.position[0], instance.position[1], instance.position[2]);
     if (!isAutoRotatedDef(def)) {
         group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
@@ -804,6 +919,10 @@ export function buildObjectGroup(def: ObjectDef, instance: ObjectInstance): THRE
 
 export function rebuildObjectGroup(group: THREE.Group, def: ObjectDef, instance: ObjectInstance): void {
     while (group.children.length > 0) group.remove(group.children[0]!);
+    group.userData['bbox'] = undefined; // will be recomputed when FBX loads
+    const isFbx = hasFbxComponent(def);
+    group.userData['isFbx'] = isFbx;
+    group.visible = isFbx;
     group.position.set(instance.position[0], instance.position[1], instance.position[2]);
     if (!isAutoRotatedDef(def)) {
         group.rotation.set(instance.rotation?.[0] ?? 0, instance.rotation?.[1] ?? 0, instance.rotation?.[2] ?? 0);
@@ -827,6 +946,9 @@ export interface RendererContext {
     instancedDefs: Map<string, InstancedDefData>;
     ambientLight: THREE.AmbientLight;
     sunLight: THREE.DirectionalLight;
+    // When set, shadow frustum tracks this point instead of camera.position.
+    // Use orbitControls.target in the editor so camera rotation doesn't pop shadows.
+    shadowOrigin?: THREE.Vector3;
 }
 
 export function createRenderer(container: HTMLElement, gameMap: GameMap): RendererContext {
@@ -837,13 +959,23 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
 
     const sunLight = new THREE.DirectionalLight();
     sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.bias = -0.001;
+    sunLight.shadow.normalBias = 0.02;
+    // Cap at 80 so the 2048^2 shadow map stays at ~0.08 units/texel near the player.
+    // At a full terrain extent the character (~2 units) would only occupy ~8 shadow pixels.
+    const shadowExtent = Math.min(
+        80,
+        Math.max(gameMap.terrain.width, gameMap.terrain.depth) * gameMap.terrain.cellSize * 0.6
+    );
     sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 500;
-    sunLight.shadow.camera.left = -100;
-    sunLight.shadow.camera.right = 100;
-    sunLight.shadow.camera.top = 100;
-    sunLight.shadow.camera.bottom = -100;
+    sunLight.shadow.camera.far = shadowExtent * 4;
+    sunLight.shadow.camera.left = -shadowExtent;
+    sunLight.shadow.camera.right = shadowExtent;
+    sunLight.shadow.camera.top = shadowExtent;
+    sunLight.shadow.camera.bottom = -shadowExtent;
+    sunLight.shadow.camera.updateProjectionMatrix();
     scene.add(sunLight);
+    scene.add(sunLight.target); // target must be in scene for position tracking to work
 
     const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 3200);
     camera.position.set(0, 10, 20);
@@ -852,7 +984,7 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(renderer.domElement);
 
     applySky(scene, gameMap.sky);
@@ -868,30 +1000,34 @@ export function createRenderer(container: HTMLElement, gameMap: GameMap): Render
     const objectGroups = new Map<string, THREE.Group>();
     const instancedDefs = new Map<string, InstancedDefData>();
 
-    // First pass: create InstancedDefData with correct capacity per def
+    // First pass: create InstancedDefData for non-FBX defs with correct capacity
     for (const def of gameMap.objectDefs) {
+        if (hasFbxComponent(def)) continue;
         const count = gameMap.objects.filter((o) => o.defId === def.id).length;
         if (count === 0) continue;
         instancedDefs.set(def.id, createInstancedDef(scene, def, count * 2 + 16));
     }
 
-    // Second pass: fill instance matrices and create invisible proxy groups
+    // Second pass: fill instance matrices and create proxy groups
     for (const instance of gameMap.objects) {
         const def = gameMap.objectDefs.find((d) => d.id === instance.defId);
         if (!def) continue;
+        const isFbx = hasFbxComponent(def);
         const group = buildObjectGroup(def, instance);
-        group.visible = false;
+        group.visible = isFbx;
         scene.add(group);
         objectGroups.set(instance.id, group);
 
-        const data = instancedDefs.get(def.id)!;
-        const slot = data.slots.size;
-        data.slots.set(instance.id, slot);
-        data.reverseSlots.set(slot, instance.id);
-        const mat = makeInstanceMatrix(instance);
-        for (const m of data.meshes) {
-            m.setMatrixAt(slot, mat);
-            m.count = Math.max(m.count, slot + 1);
+        if (!isFbx) {
+            const data = instancedDefs.get(def.id)!;
+            const slot = data.slots.size;
+            data.slots.set(instance.id, slot);
+            data.reverseSlots.set(slot, instance.id);
+            const mat = makeInstanceMatrix(instance);
+            for (const m of data.meshes) {
+                m.setMatrixAt(slot, mat);
+                m.count = Math.max(m.count, slot + 1);
+            }
         }
     }
     for (const [, data] of instancedDefs) {
@@ -926,6 +1062,34 @@ export function renderFrame(ctx: RendererContext): void {
         }
     }
     const camPos = ctx.camera.position;
+    const shadowPos = ctx.shadowOrigin ?? camPos;
+
+    // Reposition the shadow frustum to follow the camera, but only when the tracked point has
+    // moved more than half the shadow extent away from the current center. Between repositions
+    // the frustum is completely static (same as the previous system), so no per-frame pop.
+    // The first frame always repositions so the frustum starts centered on the actual position.
+    // In the editor shadowOrigin is set to orbitControls.target so camera rotation (which moves
+    // the camera position heavily) does not trigger repositions.
+    if (ctx.sunLight.castShadow) {
+        const shadowCam = ctx.sunLight.shadow.camera as THREE.OrthographicCamera;
+        const halfExtent = shadowCam.right;
+        const firstFrame = !('shadowCX' in ctx.sunLight.userData);
+        const cx = (ctx.sunLight.userData['shadowCX'] as number) ?? shadowPos.x;
+        const cz = (ctx.sunLight.userData['shadowCZ'] as number) ?? shadowPos.z;
+        const dx = shadowPos.x - cx;
+        const dz = shadowPos.z - cz;
+        if (firstFrame || dx * dx + dz * dz > halfExtent * halfExtent * 0.25) {
+            ctx.sunLight.userData['shadowCX'] = shadowPos.x;
+            ctx.sunLight.userData['shadowCZ'] = shadowPos.z;
+            const ox = (ctx.sunLight.userData['sunOffsetX'] as number) ?? 0;
+            const oy = (ctx.sunLight.userData['sunOffsetY'] as number) ?? 100;
+            const oz = (ctx.sunLight.userData['sunOffsetZ'] as number) ?? 0;
+            ctx.sunLight.position.set(shadowPos.x + ox, oy, shadowPos.z + oz);
+            ctx.sunLight.target.position.set(shadowPos.x, 0, shadowPos.z);
+            ctx.sunLight.target.updateMatrixWorld();
+        }
+    }
+
     for (const [, data] of ctx.instancedDefs) {
         for (let ci = 0; ci < data.meshes.length; ci++) {
             const autoRot = data.compAutoRotate[ci];

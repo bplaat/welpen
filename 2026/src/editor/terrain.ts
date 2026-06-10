@@ -32,6 +32,7 @@ export class TerrainEditor {
             color: 0xffffff,
             transparent: true,
             opacity: 0.2,
+            depthTest: false,
             depthWrite: false,
             side: THREE.DoubleSide,
         });

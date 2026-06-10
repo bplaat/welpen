@@ -56,13 +56,16 @@ message Terrain {
   repeated bytes layer_weights = 7;
   // Region index per cell (Uint8Array, supports up to 255 regions)
   bytes region_map = 8;
+  float repeat_x = 9;
+  float repeat_y = 10;
 }
 
 message TerrainLayer {
   bytes id = 1;
   string name = 2;
   string texture = 3;
-  float repeat = 4;
+  float repeat_x = 4;
+  float repeat_y = 5;
 }
 
 message ObjectDef {
@@ -74,47 +77,69 @@ message ObjectDef {
 message CubeComponent {
   Vec3 position = 1;
   Vec3 rotation = 2;
-  Vec3 size = 3;
+  Vec3 scale = 3;
   string texture = 4;
   bool transparent = 5;
+  float repeat_x = 6;
+  float repeat_y = 7;
 }
 
 message BillboardComponent {
   Vec3 position = 1;
-  Vec2 size = 2;
+  Vec2 scale = 2;
   string texture = 3;
   bool transparent = 4;
+  float repeat_x = 5;
+  float repeat_y = 6;
 }
 
 message PlaneComponent {
   Vec3 position = 1;
   Vec3 rotation = 2;
-  Vec2 size = 3;
+  Vec2 scale = 3;
   string texture = 4;
   bool transparent = 5;
+  float repeat_x = 6;
+  float repeat_y = 7;
 }
 
 message CylinderComponent {
   Vec3 position = 1;
   Vec3 rotation = 2;
-  Vec3 size = 3;
+  Vec3 scale = 3;
   string texture = 4;
   bool transparent = 5;
+  float repeat_x = 6;
+  float repeat_y = 7;
 }
 
 message SphereComponent {
   Vec3 position = 1;
   Vec3 rotation = 2;
-  Vec3 size = 3;
+  Vec3 scale = 3;
   string texture = 4;
   bool transparent = 5;
+  float repeat_x = 6;
+  float repeat_y = 7;
 }
 
 message SpriteComponent {
   Vec3 position = 1;
-  Vec2 size = 2;
+  Vec2 scale = 2;
   string texture = 3;
   bool transparent = 4;
+  float repeat_x = 5;
+  float repeat_y = 6;
+}
+
+message FbxModelComponent {
+  Vec3 position = 1;
+  Vec3 rotation = 2;
+  Vec3 scale = 3;
+  string model = 4;
+  string texture = 5;
+  float repeat_x = 6;
+  float repeat_y = 7;
 }
 
 message Component {
@@ -125,6 +150,7 @@ message Component {
     CylinderComponent cylinder = 4;
     SphereComponent sphere = 5;
     SpriteComponent sprite = 6;
+    FbxModelComponent fbx_model = 7;
   }
 }
 

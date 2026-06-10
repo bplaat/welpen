@@ -8,52 +8,75 @@ export interface CubeComponent {
     type: 'cube';
     position: [number, number, number];
     rotation: [number, number, number];
-    size: [number, number, number];
+    scale: [number, number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface BillboardComponent {
     type: 'billboard';
     position: [number, number, number];
-    size: [number, number];
+    scale: [number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface PlaneComponent {
     type: 'plane';
     position: [number, number, number];
     rotation: [number, number, number];
-    size: [number, number];
+    scale: [number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface CylinderComponent {
     type: 'cylinder';
     position: [number, number, number];
     rotation: [number, number, number];
-    size: [number, number, number]; // XYZ scale of unit cylinder (diameter=1, height=1)
+    scale: [number, number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface SphereComponent {
     type: 'sphere';
     position: [number, number, number];
     rotation: [number, number, number];
-    size: [number, number, number]; // XYZ scale of unit sphere (diameter=1)
+    scale: [number, number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface SpriteComponent {
     type: 'sprite';
     position: [number, number, number];
-    size: [number, number]; // width, height
+    scale: [number, number];
     texture: string;
     transparent: boolean;
+    repeatX: number;
+    repeatY: number;
+}
+
+export interface FbxModelComponent {
+    type: 'fbx';
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    model: string; // path to .fbx file, e.g. data/map/models/tree.fbx
+    texture: string; // optional texture override (empty = use model's own textures)
+    repeatX: number;
+    repeatY: number;
 }
 
 export type Component =
@@ -62,7 +85,8 @@ export type Component =
     | PlaneComponent
     | CylinderComponent
     | SphereComponent
-    | SpriteComponent;
+    | SpriteComponent
+    | FbxModelComponent;
 
 export interface ObjectDef {
     id: string; // UUIDv7 string
@@ -85,7 +109,8 @@ export interface TerrainLayer {
     id: string; // UUIDv7 string
     name?: string;
     texture: string;
-    repeat: number;
+    repeatX: number;
+    repeatY: number;
 }
 
 export interface Region {
@@ -99,6 +124,8 @@ export interface Terrain {
     cellSize: number;
     heights: number[];
     texture: string;
+    repeatX: number;
+    repeatY: number;
     layers: TerrainLayer[];
     layerWeights: number[][];
     regionMap: number[];

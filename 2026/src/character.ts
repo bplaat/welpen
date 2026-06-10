@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { fbxLoader } from './fbx.ts';
 
 export type AnimationState = 'idle' | 'walk' | 'run' | 'jump';
 
@@ -30,16 +30,15 @@ function removePositionTracks(clip: THREE.AnimationClip): THREE.AnimationClip {
 }
 
 export async function loadCharacter(): Promise<CharacterController> {
-    const loader = new FBXLoader();
     const texLoader = new THREE.TextureLoader();
 
     const [characterFbx, texture, idleFbx, walkFbx, runFbx, jumpFbx] = await Promise.all([
-        loader.loadAsync('data/characters/Cowboy.fbx'),
+        fbxLoader.loadAsync('data/characters/Cowboy.fbx'),
         texLoader.loadAsync('data/characters/Cowboy.png'),
-        loader.loadAsync('data/characters/Idle.fbx'),
-        loader.loadAsync('data/characters/Walking.fbx'),
-        loader.loadAsync('data/characters/Running.fbx'),
-        loader.loadAsync('data/characters/JumpingUp.fbx'),
+        fbxLoader.loadAsync('data/characters/Idle.fbx'),
+        fbxLoader.loadAsync('data/characters/Walking.fbx'),
+        fbxLoader.loadAsync('data/characters/Running.fbx'),
+        fbxLoader.loadAsync('data/characters/JumpingUp.fbx'),
     ]);
 
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -50,6 +49,7 @@ export async function loadCharacter(): Promise<CharacterController> {
         if (obj instanceof THREE.Mesh || obj instanceof THREE.SkinnedMesh) {
             obj.castShadow = true;
             obj.receiveShadow = false;
+            obj.frustumCulled = false; // bone transforms extend beyond bind-pose bounding sphere
             const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
             for (const mat of mats) {
                 if (

@@ -26,8 +26,9 @@ import {
     createRenderer,
     renderFrame,
     updateRegionOverlay,
+    waitForGroupLoads,
 } from '../renderer.ts';
-import { loadMap, saveMap, uploadTexture } from '../map.ts';
+import { loadMap, saveMap, uploadTexture, uploadModel } from '../map.ts';
 import { generateId } from '../utils.ts';
 import {
     BUILTIN_DEF_SPAWN_ID,
@@ -40,6 +41,7 @@ import type {
     BillboardComponent,
     CubeComponent,
     CylinderComponent,
+    FbxModelComponent,
     GameMap,
     ObjectDef,
     ObjectInstance,
@@ -139,6 +141,8 @@ let brushSize = 4;
 let brushHit: THREE.Vector3 | null = null;
 let isMouseDown = false;
 let isRightMouseDown = false;
+let mouseDownX = 0;
+let mouseDownY = 0;
 let paintLayerIndex = 0;
 let regionSelIndex = 0;
 let regionOverlayMesh: THREE.Mesh;
@@ -156,6 +160,7 @@ const keysDown = new Set<string>();
 
 // Scatter tool
 let scatterAccum = 0;
+let scatterIntensity = 5;
 
 // Add-points mode for spline/polygon placement
 let addPointsInstanceId: string | null = null;
@@ -247,7 +252,7 @@ function selectInput(value: string, options: string[], onChange: (v: string) => 
 function selectInputLabeled(
     value: string,
     options: { value: string; label: string }[],
-    onChange: (v: string) => void,
+    onChange: (v: string) => void
 ): HTMLSelectElement {
     const sel = el<HTMLSelectElement>('select');
     for (const opt of options) {
@@ -293,11 +298,40 @@ function textureField(label: string, value: string, onChange: (v: string) => voi
     return d;
 }
 
+function modelField(label: string, value: string, onChange: (v: string) => void): HTMLElement {
+    const d = el('div', 'field');
+    d.appendChild(el('label', '', label));
+    const row = el('div', 'texture-row');
+    const inp = textInput(value, onChange);
+    const btn = el<HTMLButtonElement>('button', 'tex-upload-btn', '📂');
+    btn.title = 'Upload FBX model';
+    btn.addEventListener('click', () => {
+        const fi = document.createElement('input');
+        fi.type = 'file';
+        fi.accept = '.fbx';
+        fi.addEventListener('change', () => {
+            const file = fi.files?.[0];
+            if (!file) return;
+            uploadModel(file)
+                .then((path) => {
+                    inp.value = path;
+                    onChange(path);
+                })
+                .catch((e: unknown) => alert(`Upload failed: ${String(e)}`));
+        });
+        fi.click();
+    });
+    row.appendChild(inp);
+    row.appendChild(btn);
+    d.appendChild(row);
+    return d;
+}
+
 function vec3Field(
     label: string,
     vals: [number, number, number],
     onChange: (i: number, v: number) => void,
-    attr?: [string, string, string],
+    attr?: [string, string, string]
 ): HTMLElement {
     const d = el('div', 'field');
     d.appendChild(el('label', '', label));
@@ -316,7 +350,7 @@ function vec2Field(
     label: string,
     vals: [number, number],
     onChange: (i: number, v: number) => void,
-    attr?: [string, string],
+    attr?: [string, string]
 ): HTMLElement {
     const d = el('div', 'field');
     d.appendChild(el('label', '', label));
@@ -345,7 +379,7 @@ function getNDC(e: MouseEvent): THREE.Vector2 {
     const rect = ctx.renderer.domElement.getBoundingClientRect();
     return new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
     );
 }
 
@@ -380,7 +414,12 @@ function getObjectHit(e: MouseEvent): THREE.Group | null {
     const targets: THREE.Object3D[] = [];
     for (const [, data] of ctx.instancedDefs) targets.push(...data.meshes);
     for (const [, group] of ctx.objectGroups) {
-        if (group.userData['isBuiltin']) targets.push(group);
+        if (group.userData['isBuiltin']) {
+            targets.push(group);
+        } else if (group.userData['isFbx']) {
+            const bbox = group.userData['bbox'] as THREE.Box3 | undefined;
+            if (bbox && raycaster.ray.intersectsBox(bbox)) targets.push(group);
+        }
     }
     if (mapSel && mapSel !== 'settings') {
         const sel = ctx.objectGroups.get(mapSel);
@@ -547,22 +586,23 @@ function syncCompFromMesh(mesh: THREE.Object3D): void {
     comp.position[1] = mesh.position.y;
     comp.position[2] = mesh.position.z;
 
-    if (comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere') {
+    const minScale = comp.type === 'fbx' ? 0.0001 : 0.01;
+    if (comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere' || comp.type === 'fbx') {
         comp.rotation[0] = mesh.rotation.x;
         comp.rotation[1] = mesh.rotation.y;
         comp.rotation[2] = mesh.rotation.z;
-        comp.size[0] = Math.max(0.01, mesh.scale.x);
-        comp.size[1] = Math.max(0.01, mesh.scale.y);
-        comp.size[2] = Math.max(0.01, mesh.scale.z);
+        comp.scale[0] = Math.max(minScale, mesh.scale.x);
+        comp.scale[1] = Math.max(minScale, mesh.scale.y);
+        comp.scale[2] = Math.max(minScale, mesh.scale.z);
     } else if (comp.type === 'plane') {
         comp.rotation[0] = mesh.rotation.x;
         comp.rotation[1] = mesh.rotation.y;
         comp.rotation[2] = mesh.rotation.z;
-        comp.size[0] = Math.max(0.01, mesh.scale.x);
-        comp.size[1] = Math.max(0.01, mesh.scale.y);
+        comp.scale[0] = Math.max(minScale, mesh.scale.x);
+        comp.scale[1] = Math.max(minScale, mesh.scale.y);
     } else if (comp.type === 'billboard' || comp.type === 'sprite') {
-        comp.size[0] = Math.max(0.01, mesh.scale.x);
-        comp.size[1] = Math.max(0.01, mesh.scale.y);
+        comp.scale[0] = Math.max(minScale, mesh.scale.x);
+        comp.scale[1] = Math.max(minScale, mesh.scale.y);
     }
 
     const setVal = (attr: string, v: number) => {
@@ -572,18 +612,24 @@ function syncCompFromMesh(mesh: THREE.Object3D): void {
     setVal('comp-pos-x', comp.position[0]);
     setVal('comp-pos-y', comp.position[1]);
     setVal('comp-pos-z', comp.position[2]);
-    if (comp.type === 'cube' || comp.type === 'plane' || comp.type === 'cylinder' || comp.type === 'sphere') {
+    if (
+        comp.type === 'cube' ||
+        comp.type === 'plane' ||
+        comp.type === 'cylinder' ||
+        comp.type === 'sphere' ||
+        comp.type === 'fbx'
+    ) {
         setVal('comp-rot-x', comp.rotation[0]);
         setVal('comp-rot-y', comp.rotation[1]);
         setVal('comp-rot-z', comp.rotation[2]);
     }
-    if (comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere') {
-        setVal('comp-sz-x', comp.size[0]);
-        setVal('comp-sz-y', comp.size[1]);
-        setVal('comp-sz-z', comp.size[2]);
+    if (comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere' || comp.type === 'fbx') {
+        setVal('comp-sz-x', comp.scale[0]);
+        setVal('comp-sz-y', comp.scale[1]);
+        setVal('comp-sz-z', comp.scale[2]);
     } else if (comp.type === 'plane' || comp.type === 'billboard' || comp.type === 'sprite') {
-        setVal('comp-sz-x', comp.size[0]);
-        setVal('comp-sz-y', comp.size[1]);
+        setVal('comp-sz-x', comp.scale[0]);
+        setVal('comp-sz-y', comp.scale[1]);
     }
 }
 
@@ -618,7 +664,7 @@ function rebuildDefObjects(def: ObjectDef): void {
     rebuildDefInstanced(
         ctx,
         def,
-        map.objects.filter((o) => o.defId === def.id),
+        map.objects.filter((o) => o.defId === def.id)
     );
     if (prevSel) setObjectSelected(ctx, prevSel, true);
     if (defsSelDefId === def.id) rebuildDefsPreview();
@@ -655,13 +701,15 @@ function rebuildDefsPreview(): void {
 
     // Center camera on bounding box (only if no component selected, so camera doesn't jump during editing)
     if (defsSelCompIdx < 0) {
-        const box = new THREE.Box3().setFromObject(defsGroup);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z, 1);
-        defsCamera.position.set(center.x + maxDim * 1.5, center.y + maxDim, center.z + maxDim * 1.5);
-        defsOrbit.target.copy(center);
-        defsOrbit.update();
+        waitForGroupLoads(group).then(() => {
+            const box = new THREE.Box3().setFromObject(defsGroup);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z, 1);
+            defsCamera.position.set(center.x + maxDim * 1.5, center.y + maxDim, center.z + maxDim * 1.5);
+            defsOrbit.target.copy(center);
+            defsOrbit.update();
+        });
     }
 }
 
@@ -684,13 +732,13 @@ function listItem(icon: string, label: string, selected: boolean, onClick: () =>
 function renderMapLeftPanel(body: HTMLElement): void {
     if ((currentTool === 'place' || currentTool === 'scatter') && !addPointsInstanceId) {
         body.appendChild(el('div', 'list-section', 'Object Defs'));
-        for (const def of map.objectDefs) {
+        for (const def of [...map.objectDefs].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))) {
             body.appendChild(
                 listItem('\uD83D\uDCE6', def.name ?? '', placeDefId === def.id, () => {
                     placeDefId = def.id;
                     if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
-                }),
+                })
             );
         }
         body.appendChild(el('div', 'list-section', 'Built-in Types'));
@@ -700,7 +748,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
                     placeDefId = id;
                     if (currentTool === 'place') setGhostDef(placeDefId);
                     renderLeftPanel();
-                }),
+                })
             );
         }
         return;
@@ -716,7 +764,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
             listItem('\uD83D\uDDFA', region.name ?? '', currentTool === 'region' && regionSelIndex === idx, () => {
                 regionSelIndex = idx;
                 setTool('region');
-            }),
+            })
         );
     }
     const addRegionBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Region');
@@ -729,7 +777,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
 
     if (map.objects.length > 0) {
         body.appendChild(el('div', 'list-section', 'Placed Objects'));
-        for (const inst of map.objects) {
+        for (const inst of [...map.objects].reverse()) {
             const icon = BUILTIN_ICONS[inst.defId] ?? '\uD83D\uDCE6';
             const label =
                 BUILTIN_LABELS[inst.defId] ??
@@ -741,7 +789,7 @@ function renderMapLeftPanel(body: HTMLElement): void {
 }
 
 function renderDefsLeftPanel(body: HTMLElement): void {
-    for (const def of map.objectDefs) {
+    for (const def of [...map.objectDefs].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))) {
         body.appendChild(
             listItem('\uD83D\uDCE6', def.name ?? '', defsSelDefId === def.id, () => {
                 defsSelDefId = def.id;
@@ -750,7 +798,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                 renderLeftPanel();
                 renderRightPanel();
                 rebuildDefsPreview();
-            }),
+            })
         );
     }
     const addBtn = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Definition');
@@ -778,11 +826,12 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                     sphere: '\u25CF',
                     billboard: '\uD83D\uDDBC',
                     sprite: '\u2726',
+                    fbx: '\uD83D\uDCE6',
                 };
                 body.appendChild(
                     listItem(icons[comp.type] ?? '?', `${comp.type} ${i + 1}`, defsSelCompIdx === i, () => {
                         selectDefsComp(i);
-                    }),
+                    })
                 );
             });
             const addCube = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add Cube');
@@ -791,9 +840,11 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                     type: 'cube',
                     position: [0, 0.5, 0],
                     rotation: [0, 0, 0],
-                    size: [1, 1, 1],
+                    scale: [1, 1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: false,
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -804,9 +855,11 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                     type: 'cylinder',
                     position: [0, 0.5, 0],
                     rotation: [0, 0, 0],
-                    size: [1, 1, 1],
+                    scale: [1, 1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: false,
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -817,9 +870,11 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                     type: 'sphere',
                     position: [0, 0.5, 0],
                     rotation: [0, 0, 0],
-                    size: [1, 1, 1],
+                    scale: [1, 1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: false,
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -829,9 +884,11 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                 def.components.push({
                     type: 'billboard',
                     position: [0, 0.5, 0],
-                    size: [1, 1],
+                    scale: [1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: true,
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -841,9 +898,11 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                 def.components.push({
                     type: 'sprite',
                     position: [0, 0.5, 0],
-                    size: [1, 1],
+                    scale: [1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: true,
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -854,9 +913,26 @@ function renderDefsLeftPanel(body: HTMLElement): void {
                     type: 'plane',
                     position: [0, 0, 0],
                     rotation: [-Math.PI / 2, 0, 0],
-                    size: [1, 1],
+                    scale: [1, 1],
                     texture: 'data/map/textures/placeholder.png',
                     transparent: false,
+                    repeatX: 1,
+                    repeatY: 1,
+                });
+                rebuildDefObjects(def);
+                selectDefsComp(def.components.length - 1);
+            });
+            const addFbx = el<HTMLButtonElement>('button', 'list-add-btn', '+ Add FBX Model');
+            addFbx.addEventListener('click', () => {
+                def.components.push({
+                    type: 'fbx',
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    model: '',
+                    texture: '',
+                    repeatX: 1,
+                    repeatY: 1,
                 });
                 rebuildDefObjects(def);
                 selectDefsComp(def.components.length - 1);
@@ -867,6 +943,7 @@ function renderDefsLeftPanel(body: HTMLElement): void {
             body.appendChild(addBill);
             body.appendChild(addSpr);
             body.appendChild(addPlane);
+            body.appendChild(addFbx);
         }
     }
 }
@@ -911,8 +988,8 @@ function renderRegionPanel(body: HTMLElement): void {
             textInput(region.name ?? '', (v) => {
                 region.name = v || undefined;
                 renderLeftPanel();
-            }),
-        ),
+            })
+        )
     );
     body.appendChild(
         actionBtn('Delete Region', 'danger', () => {
@@ -928,7 +1005,7 @@ function renderRegionPanel(body: HTMLElement): void {
             if (map.regions.length === 0) setTool('select');
             else renderLeftPanel();
             renderRightPanel();
-        }),
+        })
     );
 }
 
@@ -947,9 +1024,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newW = Math.max(2, Math.min(256, Math.round(v)));
                 },
-                1,
-            ),
-        ),
+                1
+            )
+        )
     );
     body.appendChild(
         makeField(
@@ -959,9 +1036,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newD = Math.max(2, Math.min(256, Math.round(v)));
                 },
-                1,
-            ),
-        ),
+                1
+            )
+        )
     );
     body.appendChild(
         makeField(
@@ -971,9 +1048,9 @@ function renderMapSettings(body: HTMLElement): void {
                 (v) => {
                     newCS = Math.max(0.5, v);
                 },
-                0.5,
-            ),
-        ),
+                0.5
+            )
+        )
     );
     body.appendChild(
         textureField('Ground Texture', map.terrain.texture, (v) => {
@@ -982,7 +1059,39 @@ function renderMapSettings(body: HTMLElement): void {
             terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
             contourMesh.geometry = ctx.terrainMesh.geometry;
             regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
-        }),
+        })
+    );
+    body.appendChild(
+        makeField(
+            'Ground Repeat X',
+            numInput(
+                map.terrain.repeatX,
+                (v) => {
+                    map.terrain.repeatX = Math.max(0.25, v);
+                    rebuildTerrain(ctx, map.terrain);
+                    terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
+                    contourMesh.geometry = ctx.terrainMesh.geometry;
+                    regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
+                },
+                0.25
+            )
+        )
+    );
+    body.appendChild(
+        makeField(
+            'Ground Repeat Y',
+            numInput(
+                map.terrain.repeatY,
+                (v) => {
+                    map.terrain.repeatY = Math.max(0.25, v);
+                    rebuildTerrain(ctx, map.terrain);
+                    terrainEditor.setMesh(ctx.terrainMesh, map.terrain, ctx.terrainSplatMap);
+                    contourMesh.geometry = ctx.terrainMesh.geometry;
+                    regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
+                },
+                0.25
+            )
+        )
     );
 
     body.appendChild(makeSection('Terrain Layers'));
@@ -1084,7 +1193,7 @@ function renderMapSettings(body: HTMLElement): void {
             contourMesh.geometry = ctx.terrainMesh.geometry;
             updateRegionOverlay(ctx.regionOverlayTex, map.terrain, map.regions);
             regionOverlayMesh.geometry = ctx.terrainMesh.geometry;
-        }),
+        })
     );
 
     body.appendChild(makeSection('Sky'));
@@ -1094,14 +1203,14 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.sky.color, (v) => {
                 map.sky.color = v;
                 applySky(ctx.scene, map.sky);
-            }),
-        ),
+            })
+        )
     );
     body.appendChild(
         textureField('Texture (equirectangular)', map.sky.texture ?? '', (v) => {
             map.sky.texture = v.trim() || null;
             applySky(ctx.scene, map.sky);
-        }),
+        })
     );
 
     body.appendChild(makeSection('Light'));
@@ -1111,8 +1220,8 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.light.ambientColor, (v) => {
                 map.light.ambientColor = v;
                 applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-            }),
-        ),
+            })
+        )
     );
     body.appendChild(
         makeField(
@@ -1123,9 +1232,9 @@ function renderMapSettings(body: HTMLElement): void {
                     map.light.ambientIntensity = Math.max(0, v);
                     applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
                 },
-                0.1,
-            ),
-        ),
+                0.1
+            )
+        )
     );
     body.appendChild(
         makeField(
@@ -1133,8 +1242,8 @@ function renderMapSettings(body: HTMLElement): void {
             colorInput(map.light.sunColor, (v) => {
                 map.light.sunColor = v;
                 applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-            }),
-        ),
+            })
+        )
     );
     body.appendChild(
         makeField(
@@ -1145,21 +1254,21 @@ function renderMapSettings(body: HTMLElement): void {
                     map.light.sunIntensity = Math.max(0, v);
                     applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
                 },
-                0.1,
-            ),
-        ),
+                0.1
+            )
+        )
     );
     body.appendChild(
         vec3Field('Sun Position', map.light.sunPosition, (i, v) => {
             map.light.sunPosition[i] = v;
             applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-        }),
+        })
     );
     body.appendChild(
         checkboxInput(map.light.shadows, 'Shadows', (v) => {
             map.light.shadows = v;
             applyLight(ctx.ambientLight, ctx.sunLight, ctx.renderer, map.light);
-        }),
+        })
     );
 }
 
@@ -1188,9 +1297,9 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                         if (wasSelected) setObjectSelected(ctx, instance.id, true);
                     }
                     renderLeftPanel();
-                },
-            ),
-        ),
+                }
+            )
+        )
     );
 
     body.appendChild(
@@ -1206,8 +1315,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['pos-x', 'pos-y', 'pos-z'],
-        ),
+            ['pos-x', 'pos-y', 'pos-z']
+        )
     );
 
     body.appendChild(
@@ -1223,8 +1332,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['rot-x', 'rot-y', 'rot-z'],
-        ),
+            ['rot-x', 'rot-y', 'rot-z']
+        )
     );
 
     body.appendChild(
@@ -1240,8 +1349,8 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
                     syncObjectToInstanced(ctx, instance.id);
                 }
             },
-            ['scl-x', 'scl-y', 'scl-z'],
-        ),
+            ['scl-x', 'scl-y', 'scl-z']
+        )
     );
 
     body.appendChild(
@@ -1249,7 +1358,7 @@ function renderInstancePanel(body: HTMLElement, instance: ObjectInstance): void 
             removeObjectInstance(ctx, instance.id);
             map.objects = map.objects.filter((o) => o.id !== instance.id);
             clearSelection();
-        }),
+        })
     );
 }
 
@@ -1267,7 +1376,7 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                 setGhostDef(BUILTIN_DEF_POINT_ID);
                 renderLeftPanel();
                 renderRightPanel();
-            }),
+            })
         );
     }
 
@@ -1283,8 +1392,8 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                     selectionBox.setFromObject(g);
                 }
             },
-            ['bi-pos-x', 'bi-pos-y', 'bi-pos-z'],
-        ),
+            ['bi-pos-x', 'bi-pos-y', 'bi-pos-z']
+        )
     );
 
     if (instance.defId === BUILTIN_DEF_CIRCLE_ID) {
@@ -1306,9 +1415,9 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
                             }
                         }
                     },
-                    0.5,
-                ),
-            ),
+                    0.5
+                )
+            )
         );
     }
 
@@ -1317,7 +1426,7 @@ function renderBuiltinInstancePanel(body: HTMLElement, instance: ObjectInstance)
             removeObjectInstance(ctx, instance.id);
             map.objects = map.objects.filter((o) => o.id !== instance.id);
             clearSelection();
-        }),
+        })
     );
 }
 
@@ -1337,8 +1446,8 @@ function renderDefsRightPanel(body: HTMLElement): void {
             textInput(def.name ?? '', (v) => {
                 def.name = v || undefined;
                 renderLeftPanel();
-            }),
-        ),
+            })
+        )
     );
 
     if (defsSelCompIdx < 0 || defsSelCompIdx >= def.components.length) return;
@@ -1349,74 +1458,101 @@ function renderDefsRightPanel(body: HTMLElement): void {
     body.appendChild(
         makeField(
             'Type',
-            selectInput(comp.type, ['cube', 'cylinder', 'sphere', 'billboard', 'sprite', 'plane'], (v) => {
+            selectInput(comp.type, ['cube', 'cylinder', 'sphere', 'billboard', 'sprite', 'plane', 'fbx'], (v) => {
                 if (v === comp.type) return;
                 const rot3: [number, number, number] =
                     'rotation' in comp ? (comp as CubeComponent).rotation : [0, 0, 0];
-                const sz3: [number, number, number] =
-                    'size' in comp && (comp as CubeComponent).size?.length === 3
-                        ? ((comp as CubeComponent).size as [number, number, number])
+                const sc3: [number, number, number] =
+                    'scale' in comp && (comp as CubeComponent).scale?.length === 3
+                        ? ((comp as CubeComponent).scale as [number, number, number])
                         : [1, 1, 1];
-                const sz2: [number, number] =
-                    'size' in comp
-                        ? [(comp as BillboardComponent).size[0] ?? 1, (comp as BillboardComponent).size[1] ?? 1]
+                const sc2: [number, number] =
+                    'scale' in comp
+                        ? [(comp as BillboardComponent).scale[0] ?? 1, (comp as BillboardComponent).scale[1] ?? 1]
                         : [1, 1];
+                const tex = comp.type !== 'fbx' ? comp.texture : 'data/map/textures/placeholder.png';
+                const transp = comp.type !== 'fbx' ? comp.transparent : false;
+                const repX = comp.repeatX;
+                const repY = comp.repeatY;
                 if (v === 'cube')
                     def.components[defsSelCompIdx] = {
                         type: 'cube',
                         position: comp.position,
                         rotation: rot3,
-                        size: sz3,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc3,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 else if (v === 'cylinder')
                     def.components[defsSelCompIdx] = {
                         type: 'cylinder',
                         position: comp.position,
                         rotation: rot3,
-                        size: sz3,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc3,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 else if (v === 'sphere')
                     def.components[defsSelCompIdx] = {
                         type: 'sphere',
                         position: comp.position,
                         rotation: rot3,
-                        size: sz3,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc3,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 else if (v === 'plane')
                     def.components[defsSelCompIdx] = {
                         type: 'plane',
                         position: comp.position,
                         rotation: rot3,
-                        size: sz2,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc2,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 else if (v === 'sprite')
                     def.components[defsSelCompIdx] = {
                         type: 'sprite',
                         position: comp.position,
-                        size: sz2,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc2,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
+                    };
+                else if (v === 'fbx')
+                    def.components[defsSelCompIdx] = {
+                        type: 'fbx',
+                        position: comp.position,
+                        rotation: rot3,
+                        scale: sc3,
+                        model: '',
+                        texture: '',
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 else
                     def.components[defsSelCompIdx] = {
                         type: 'billboard',
                         position: comp.position,
-                        size: sz2,
-                        texture: comp.texture,
-                        transparent: comp.transparent,
+                        scale: sc2,
+                        texture: tex,
+                        transparent: transp,
+                        repeatX: repX,
+                        repeatY: repY,
                     };
                 rebuildDefObjects(def);
                 selectDefsComp(defsSelCompIdx);
-            }),
-        ),
+            })
+        )
     );
 
     body.appendChild(
@@ -1428,46 +1564,52 @@ function renderDefsRightPanel(body: HTMLElement): void {
                 const mesh = getDefsCompMesh();
                 if (mesh) mesh.position.setComponent(i, v);
             },
-            ['comp-pos-x', 'comp-pos-y', 'comp-pos-z'],
-        ),
+            ['comp-pos-x', 'comp-pos-y', 'comp-pos-z']
+        )
     );
 
-    const has3Size = comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere';
+    const has3Size = comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere' || comp.type === 'fbx';
     const has2Size = comp.type === 'plane' || comp.type === 'billboard' || comp.type === 'sprite';
-    const hasRot = comp.type === 'cube' || comp.type === 'cylinder' || comp.type === 'sphere' || comp.type === 'plane';
+    const hasRot =
+        comp.type === 'cube' ||
+        comp.type === 'cylinder' ||
+        comp.type === 'sphere' ||
+        comp.type === 'plane' ||
+        comp.type === 'fbx';
 
     if (has3Size) {
-        const c = comp as CubeComponent | CylinderComponent | SphereComponent;
+        const c = comp as CubeComponent | CylinderComponent | SphereComponent | FbxModelComponent;
+        const minSc = comp.type === 'fbx' ? 0.0001 : 0.01;
         body.appendChild(
             vec3Field(
-                'Size',
-                c.size,
+                'Scale',
+                c.scale,
                 (i, v) => {
-                    c.size[i] = Math.max(0.01, v);
+                    c.scale[i] = Math.max(minSc, v);
                     const mesh = getDefsCompMesh();
-                    if (mesh) mesh.scale.setComponent(i, Math.max(0.01, v));
+                    if (mesh) mesh.scale.setComponent(i, Math.max(minSc, v));
                 },
-                ['comp-sz-x', 'comp-sz-y', 'comp-sz-z'],
-            ),
+                ['comp-sz-x', 'comp-sz-y', 'comp-sz-z']
+            )
         );
     } else if (has2Size) {
         const c = comp as PlaneComponent | BillboardComponent | SpriteComponent;
         body.appendChild(
             vec2Field(
-                'Size',
-                c.size,
+                'Scale',
+                c.scale,
                 (i, v) => {
-                    c.size[i] = Math.max(0.01, v);
+                    c.scale[i] = Math.max(0.01, v);
                     const mesh = getDefsCompMesh();
                     if (mesh) mesh.scale.setComponent(i, Math.max(0.01, v));
                 },
-                ['comp-sz-x', 'comp-sz-y'],
-            ),
+                ['comp-sz-x', 'comp-sz-y']
+            )
         );
     }
 
     if (hasRot) {
-        const c = comp as CubeComponent | CylinderComponent | SphereComponent | PlaneComponent;
+        const c = comp as CubeComponent | CylinderComponent | SphereComponent | PlaneComponent | FbxModelComponent;
         body.appendChild(
             vec3Field(
                 'Rotation',
@@ -1477,22 +1619,64 @@ function renderDefsRightPanel(body: HTMLElement): void {
                     const mesh = getDefsCompMesh();
                     if (mesh) mesh.rotation.set(c.rotation[0], c.rotation[1], c.rotation[2]);
                 },
-                ['comp-rot-x', 'comp-rot-y', 'comp-rot-z'],
-            ),
+                ['comp-rot-x', 'comp-rot-y', 'comp-rot-z']
+            )
         );
     }
 
+    if (comp.type === 'fbx') {
+        const c = comp as FbxModelComponent;
+        body.appendChild(
+            modelField('Model', c.model, (v) => {
+                c.model = v;
+                rebuildDefObjects(def);
+            })
+        );
+        body.appendChild(
+            textureField('Texture Override', c.texture, (v) => {
+                c.texture = v;
+                rebuildDefObjects(def);
+            })
+        );
+    } else {
+        body.appendChild(
+            textureField('Texture', comp.texture, (v) => {
+                comp.texture = v;
+                rebuildDefObjects(def);
+            })
+        );
+        body.appendChild(
+            checkboxInput(comp.transparent, 'Transparent', (v) => {
+                comp.transparent = v;
+                rebuildDefObjects(def);
+            })
+        );
+    }
     body.appendChild(
-        textureField('Texture', comp.texture, (v) => {
-            comp.texture = v;
-            rebuildDefObjects(def);
-        }),
+        makeField(
+            'Repeat X',
+            numInput(
+                comp.repeatX,
+                (v) => {
+                    comp.repeatX = Math.max(0.25, v);
+                    rebuildDefObjects(def);
+                },
+                0.25
+            )
+        )
     );
     body.appendChild(
-        checkboxInput(comp.transparent, 'Transparent', (v) => {
-            comp.transparent = v;
-            rebuildDefObjects(def);
-        }),
+        makeField(
+            'Repeat Y',
+            numInput(
+                comp.repeatY,
+                (v) => {
+                    comp.repeatY = Math.max(0.25, v);
+                    rebuildDefObjects(def);
+                },
+                0.25
+            )
+        )
     );
     body.appendChild(
         actionBtn('Delete Component', 'danger', () => {
@@ -1500,7 +1684,7 @@ function renderDefsRightPanel(body: HTMLElement): void {
             const newIdx = Math.min(defsSelCompIdx, def.components.length - 1);
             rebuildDefObjects(def);
             selectDefsComp(newIdx);
-        }),
+        })
     );
 }
 
@@ -1513,13 +1697,15 @@ function openLayerDialog(layerIdx: number): void {
     const titleEl = $('layer-dialog-title');
     const nameInp = $('layer-dialog-name') as HTMLInputElement;
     const texInp = $('layer-dialog-texture') as HTMLInputElement;
-    const repeatInp = $('layer-dialog-repeat') as HTMLInputElement;
+    const repeatXInp = $('layer-dialog-repeat-x') as HTMLInputElement;
+    const repeatYInp = $('layer-dialog-repeat-y') as HTMLInputElement;
 
     const isEdit = layerIdx >= 0;
     titleEl.textContent = isEdit ? 'Edit Layer' : 'Add Layer';
-    nameInp.value = isEdit ? (map.terrain.layers[layerIdx]?.name ?? '') : '';
-    texInp.value = isEdit ? (map.terrain.layers[layerIdx]?.texture ?? '') : map.terrain.texture;
-    repeatInp.value = String(isEdit ? (map.terrain.layers[layerIdx]?.repeat ?? 1) : 1);
+    nameInp.value = isEdit ? map.terrain.layers[layerIdx]?.name ?? '' : '';
+    texInp.value = isEdit ? map.terrain.layers[layerIdx]?.texture ?? '' : map.terrain.texture;
+    repeatXInp.value = String(isEdit ? map.terrain.layers[layerIdx]?.repeatX ?? 1 : 1);
+    repeatYInp.value = String(isEdit ? map.terrain.layers[layerIdx]?.repeatY ?? 1 : 1);
 
     const save = $('layer-dialog-save');
     const cancel = $('layer-dialog-cancel');
@@ -1528,14 +1714,16 @@ function openLayerDialog(layerIdx: number): void {
     const onSave = (): void => {
         const name = nameInp.value.trim() || 'Layer';
         const texture = texInp.value.trim() || map.terrain.texture;
-        const repeat = Math.max(0.25, parseFloat(repeatInp.value) || 1);
+        const repeatX = Math.max(0.25, parseFloat(repeatXInp.value) || 1);
+        const repeatY = Math.max(0.25, parseFloat(repeatYInp.value) || 1);
         if (isEdit) {
             map.terrain.layers[layerIdx]!.name = name;
             map.terrain.layers[layerIdx]!.texture = texture;
-            map.terrain.layers[layerIdx]!.repeat = repeat;
+            map.terrain.layers[layerIdx]!.repeatX = repeatX;
+            map.terrain.layers[layerIdx]!.repeatY = repeatY;
         } else {
             const newIndex = map.terrain.layers.length;
-            map.terrain.layers.push({ id: generateId(), name, texture, repeat });
+            map.terrain.layers.push({ id: generateId(), name, texture, repeatX, repeatY });
             map.terrain.layerWeights[newIndex] = new Array(map.terrain.width * map.terrain.depth).fill(0) as number[];
             paintLayerIndex = newIndex;
         }
@@ -1589,6 +1777,7 @@ function setTool(tool: MapTool): void {
     const isTerrain = tool === 'raise' || tool === 'lower' || tool === 'level' || tool === 'paint' || tool === 'region';
     const showBrush = isTerrain || tool === 'scatter' || tool === 'erase';
     $('brush-controls').classList.toggle('visible', showBrush);
+    $('scatter-controls').classList.toggle('visible', tool === 'scatter');
     terrainEditor.showBrush(showBrush);
     contourMesh.visible = tool === 'raise' || tool === 'lower' || tool === 'level';
     regionOverlayMesh.visible = tool === 'region';
@@ -1668,7 +1857,11 @@ function setupViewportEvents(): void {
 
     canvas.addEventListener('mousedown', (e) => {
         if (e.button !== 0 && e.button !== 2) return;
-        if (e.button === 0) isMouseDown = true;
+        if (e.button === 0) {
+            isMouseDown = true;
+            mouseDownX = e.clientX;
+            mouseDownY = e.clientY;
+        }
         if (e.button === 2) isRightMouseDown = true;
         if (activeTab !== 'world') return;
         if (e.button === 2 && addPointsInstanceId) {
@@ -1684,7 +1877,7 @@ function setupViewportEvents(): void {
                 pts.push([hit.x - instance.position[0], hit.y - instance.position[1], hit.z - instance.position[2]] as [
                     number,
                     number,
-                    number,
+                    number
                 ]);
                 removeObjectInstance(ctx, instance.id);
                 addBuiltinInstance(ctx, instance);
@@ -1697,15 +1890,7 @@ function setupViewportEvents(): void {
             }
             return;
         }
-        if (e.button === 0 && currentTool === 'select') {
-            if (transformControls.dragging) return;
-            const group = getObjectHit(e);
-            if (group) {
-                selectMapItem(group.userData['instanceId'] as string);
-            } else {
-                clearSelection();
-            }
-        } else if (e.button === 0 && currentTool === 'place') {
+        if (e.button === 0 && currentTool === 'place') {
             if (!placeDefId) return;
             const hit = getTerrainHit(e);
             if (!hit) return;
@@ -1759,7 +1944,18 @@ function setupViewportEvents(): void {
     });
 
     document.addEventListener('mouseup', (e) => {
-        if (e.button === 0) isMouseDown = false;
+        if (e.button === 0) {
+            const wasDrag = Math.abs(e.clientX - mouseDownX) > 4 || Math.abs(e.clientY - mouseDownY) > 4;
+            isMouseDown = false;
+            if (activeTab === 'world' && currentTool === 'select' && !wasDrag && !transformControls.dragging) {
+                const group = getObjectHit(e);
+                if (group) {
+                    selectMapItem(group.userData['instanceId'] as string);
+                } else {
+                    clearSelection();
+                }
+            }
+        }
         if (e.button === 2) isRightMouseDown = false;
         if (
             currentTool === 'raise' ||
@@ -1824,6 +2020,17 @@ function setupToolbarEvents(): void {
         brushSize = parseInt(brushSizeInp.value, 10);
         brushSizeLbl.textContent = String(brushSize);
     });
+    brushSize = parseInt(brushSizeInp.value, 10);
+    brushSizeLbl.textContent = String(brushSize);
+
+    const scatterIntensityInp = $('scatter-intensity') as HTMLInputElement;
+    const scatterIntensityLbl = $('scatter-intensity-label');
+    scatterIntensityInp.addEventListener('input', () => {
+        scatterIntensity = parseInt(scatterIntensityInp.value, 10);
+        scatterIntensityLbl.textContent = String(scatterIntensity);
+    });
+    scatterIntensity = parseInt(scatterIntensityInp.value, 10);
+    scatterIntensityLbl.textContent = String(scatterIntensity);
 
     $('btn-add-def').addEventListener('click', () => {
         const id = generateId();
@@ -1853,9 +2060,11 @@ function setupToolbarEvents(): void {
             type: 'cube',
             position: [0, 0.5, 0],
             rotation: [0, 0, 0],
-            size: [1, 1, 1],
+            scale: [1, 1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: false,
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1867,9 +2076,11 @@ function setupToolbarEvents(): void {
             type: 'cylinder',
             position: [0, 0.5, 0],
             rotation: [0, 0, 0],
-            size: [1, 1, 1],
+            scale: [1, 1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: false,
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1881,9 +2092,11 @@ function setupToolbarEvents(): void {
             type: 'sphere',
             position: [0, 0.5, 0],
             rotation: [0, 0, 0],
-            size: [1, 1, 1],
+            scale: [1, 1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: false,
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1894,9 +2107,11 @@ function setupToolbarEvents(): void {
         def.components.push({
             type: 'billboard',
             position: [0, 0.5, 0],
-            size: [1, 1],
+            scale: [1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: true,
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1907,9 +2122,11 @@ function setupToolbarEvents(): void {
         def.components.push({
             type: 'sprite',
             position: [0, 0.5, 0],
-            size: [1, 1],
+            scale: [1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: true,
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1921,9 +2138,27 @@ function setupToolbarEvents(): void {
             type: 'plane',
             position: [0, 0, 0],
             rotation: [-Math.PI / 2, 0, 0],
-            size: [1, 1],
+            scale: [1, 1],
             texture: 'data/map/textures/placeholder.png',
             transparent: false,
+            repeatX: 1,
+            repeatY: 1,
+        });
+        rebuildDefObjects(def);
+        selectDefsComp(def.components.length - 1);
+    });
+    $('btn-add-fbx').addEventListener('click', () => {
+        const def = map.objectDefs.find((d) => d.id === defsSelDefId);
+        if (!def) return;
+        def.components.push({
+            type: 'fbx',
+            position: [0, 0, 0],
+            rotation: [0, 0, 0],
+            scale: [1, 1, 1],
+            model: '',
+            texture: '',
+            repeatX: 1,
+            repeatY: 1,
         });
         rebuildDefObjects(def);
         selectDefsComp(def.components.length - 1);
@@ -1995,20 +2230,25 @@ async function main(): Promise<void> {
 
     orbitControls = new OrbitControls(ctx.camera, ctx.renderer.domElement);
     orbitControls.target.set(0, 0, 0);
+    ctx.shadowOrigin = orbitControls.target; // track orbit target so camera rotation doesn't pop shadows
     orbitControls.enableDamping = true;
     orbitControls.dampingFactor = 0.08;
     const mapW = map.terrain.width * map.terrain.cellSize;
     const mapD = map.terrain.depth * map.terrain.cellSize;
+    orbitControls.minDistance = 2;
     orbitControls.maxDistance = Math.sqrt(mapW * mapW + mapD * mapD);
 
-    // Restore editor camera from localStorage
+    // Restore editor camera from localStorage, discarding states with out-of-range orbit distance
     const editorCamLS = 'wildwest_editor_cam';
     try {
         const raw = localStorage.getItem(editorCamLS);
         if (raw) {
             const s = JSON.parse(raw) as { cx: number; cy: number; cz: number; tx: number; ty: number; tz: number };
-            ctx.camera.position.set(s.cx, s.cy, s.cz);
-            orbitControls.target.set(s.tx, s.ty, s.tz);
+            const dist = Math.sqrt((s.cx - s.tx) ** 2 + (s.cy - s.ty) ** 2 + (s.cz - s.tz) ** 2);
+            if (isFinite(dist) && dist >= orbitControls.minDistance && dist <= orbitControls.maxDistance) {
+                ctx.camera.position.set(s.cx, s.cy, s.cz);
+                orbitControls.target.set(s.tx, s.ty, s.tz);
+            }
         }
     } catch {
         /* ignore */
@@ -2025,7 +2265,7 @@ async function main(): Promise<void> {
                 tx: orbitControls.target.x,
                 ty: orbitControls.target.y,
                 tz: orbitControls.target.z,
-            }),
+            })
         );
     });
 
@@ -2036,7 +2276,18 @@ async function main(): Promise<void> {
     transformControls = new TransformControls(ctx.camera, ctx.renderer.domElement);
     transformControls.setMode(transformMode);
     transformControls.addEventListener('dragging-changed', (e) => {
-        orbitControls.enabled = !(e as THREE.Event & { value: boolean }).value;
+        const dragging = (e as THREE.Event & { value: boolean }).value;
+        orbitControls.enabled = !dragging;
+        if (!dragging) {
+            // Recompute the cached bbox for moved FBX groups so future picks stay accurate
+            const group = transformControls.object as THREE.Group | undefined;
+            if (group?.userData['isFbx']) {
+                group.updateWorldMatrix(true, true);
+                const bbox = group.userData['bbox'] as THREE.Box3 | undefined;
+                if (bbox) bbox.setFromObject(group);
+                else group.userData['bbox'] = new THREE.Box3().setFromObject(group);
+            }
+        }
     });
     transformControls.addEventListener('objectChange', () => {
         const group = transformControls.object as THREE.Group | undefined;
@@ -2053,7 +2304,7 @@ async function main(): Promise<void> {
 
     const regionSplatScale = new THREE.Vector2(
         1 / ((map.terrain.width - 1) * map.terrain.cellSize),
-        1 / ((map.terrain.depth - 1) * map.terrain.cellSize),
+        1 / ((map.terrain.depth - 1) * map.terrain.cellSize)
     );
     regionOverlayMesh = new THREE.Mesh(
         ctx.terrainMesh.geometry,
@@ -2085,7 +2336,7 @@ async function main(): Promise<void> {
                     gl_FragColor = col;
                 }
             `,
-        }),
+        })
     );
     regionOverlayMesh.visible = false;
     ctx.scene.add(regionOverlayMesh);
@@ -2117,7 +2368,7 @@ async function main(): Promise<void> {
                 gl_FragColor = vec4(1.0, 0.85, 0.0, 0.85);
             }
         `,
-        }),
+        })
     );
     contourMesh.visible = false;
     ctx.scene.add(contourMesh);
@@ -2203,7 +2454,7 @@ async function main(): Promise<void> {
                     delta,
                     map.objects,
                     ctx.objectGroups,
-                    terrainSync,
+                    terrainSync
                 );
             }
             if (isMouseDown && currentTool === 'level' && brushHit) {
@@ -2214,7 +2465,7 @@ async function main(): Promise<void> {
                     delta,
                     map.objects,
                     ctx.objectGroups,
-                    terrainSync,
+                    terrainSync
                 );
             }
             if ((isMouseDown || isRightMouseDown) && currentTool === 'paint' && brushHit) {
@@ -2228,13 +2479,17 @@ async function main(): Promise<void> {
             if (isMouseDown && currentTool === 'scatter' && brushHit && placeDefId && !isBuiltinId(placeDefId)) {
                 const def = map.objectDefs.find((d) => d.id === placeDefId);
                 if (def) {
-                    scatterAccum += delta * brushSize * 0.5;
+                    const { width, depth, cellSize } = map.terrain;
+                    const halfW = (width * cellSize) / 2;
+                    const halfD = (depth * cellSize) / 2;
+                    scatterAccum += delta * brushSize * 0.5 * scatterIntensity;
                     while (scatterAccum >= 1) {
                         scatterAccum -= 1;
                         const angle = Math.random() * Math.PI * 2;
                         const dist = Math.sqrt(Math.random()) * brushSize;
                         const x = brushHit.x + Math.cos(angle) * dist;
                         const z = brushHit.z + Math.sin(angle) * dist;
+                        if (x < -halfW || x > halfW || z < -halfD || z > halfD) continue;
                         const y = getTerrainY(map.terrain, x, z);
                         const rotY = isAutoRotatedDef(def) ? 0 : Math.random() * Math.PI * 2;
                         const instance: ObjectInstance = {

@@ -13,6 +13,7 @@ import type {
     CylinderComponent,
     SphereComponent,
     SpriteComponent,
+    FbxModelComponent,
     ObjectDef,
     ObjectInstance,
     TerrainLayer,
@@ -29,6 +30,7 @@ import {
     type Terrain as ProtoTerrain,
     type Vec2,
     type Vec3,
+    type FbxModelComponent as ProtoFbxModelComponent,
 } from '../src-gen/map.ts';
 
 const MAP_FILE = 'data/map/map.bin';
@@ -94,18 +96,22 @@ function protoToComponent(c: ProtoComponent): Component {
             type: 'cube',
             position: v3(c.cube.position),
             rotation: v3(c.cube.rotation),
-            size: v3(c.cube.size),
+            scale: v3(c.cube.scale),
             texture: c.cube.texture,
             transparent: c.cube.transparent,
+            repeatX: c.cube.repeatX || 1,
+            repeatY: c.cube.repeatY || 1,
         } satisfies CubeComponent;
     }
     if (c.billboard) {
         return {
             type: 'billboard',
             position: v3(c.billboard.position),
-            size: v2(c.billboard.size),
+            scale: v2(c.billboard.scale),
             texture: c.billboard.texture,
             transparent: c.billboard.transparent,
+            repeatX: c.billboard.repeatX || 1,
+            repeatY: c.billboard.repeatY || 1,
         } satisfies BillboardComponent;
     }
     if (c.plane) {
@@ -113,9 +119,11 @@ function protoToComponent(c: ProtoComponent): Component {
             type: 'plane',
             position: v3(c.plane.position),
             rotation: v3(c.plane.rotation),
-            size: v2(c.plane.size),
+            scale: v2(c.plane.scale),
             texture: c.plane.texture,
             transparent: c.plane.transparent,
+            repeatX: c.plane.repeatX || 1,
+            repeatY: c.plane.repeatY || 1,
         } satisfies PlaneComponent;
     }
     if (c.cylinder) {
@@ -123,9 +131,11 @@ function protoToComponent(c: ProtoComponent): Component {
             type: 'cylinder',
             position: v3(c.cylinder.position),
             rotation: v3(c.cylinder.rotation),
-            size: v3(c.cylinder.size),
+            scale: v3(c.cylinder.scale),
             texture: c.cylinder.texture,
             transparent: c.cylinder.transparent,
+            repeatX: c.cylinder.repeatX || 1,
+            repeatY: c.cylinder.repeatY || 1,
         } satisfies CylinderComponent;
     }
     if (c.sphere) {
@@ -133,19 +143,35 @@ function protoToComponent(c: ProtoComponent): Component {
             type: 'sphere',
             position: v3(c.sphere.position),
             rotation: v3(c.sphere.rotation),
-            size: v3(c.sphere.size),
+            scale: v3(c.sphere.scale),
             texture: c.sphere.texture,
             transparent: c.sphere.transparent,
+            repeatX: c.sphere.repeatX || 1,
+            repeatY: c.sphere.repeatY || 1,
         } satisfies SphereComponent;
     }
     if (c.sprite) {
         return {
             type: 'sprite',
             position: v3(c.sprite.position),
-            size: v2(c.sprite.size),
+            scale: v2(c.sprite.scale),
             texture: c.sprite.texture,
             transparent: c.sprite.transparent,
+            repeatX: c.sprite.repeatX || 1,
+            repeatY: c.sprite.repeatY || 1,
         } satisfies SpriteComponent;
+    }
+    if (c.fbxModel) {
+        return {
+            type: 'fbx',
+            position: v3(c.fbxModel.position),
+            rotation: v3(c.fbxModel.rotation),
+            scale: v3(c.fbxModel.scale),
+            model: c.fbxModel.model,
+            texture: c.fbxModel.texture,
+            repeatX: c.fbxModel.repeatX || 1,
+            repeatY: c.fbxModel.repeatY || 1,
+        } satisfies FbxModelComponent;
     }
     throw new Error('Unknown component kind in proto message');
 }
@@ -156,9 +182,11 @@ function componentToProto(c: Component): ProtoComponent {
             cube: {
                 position: toV3(c.position),
                 rotation: toV3(c.rotation),
-                size: toV3(c.size),
+                scale: toV3(c.scale),
                 texture: c.texture,
                 transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
             },
         };
     }
@@ -166,9 +194,11 @@ function componentToProto(c: Component): ProtoComponent {
         return {
             billboard: {
                 position: toV3(c.position),
-                size: toV2(c.size),
+                scale: toV2(c.scale),
                 texture: c.texture,
                 transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
             },
         };
     }
@@ -177,9 +207,11 @@ function componentToProto(c: Component): ProtoComponent {
             plane: {
                 position: toV3(c.position),
                 rotation: toV3(c.rotation),
-                size: toV2(c.size),
+                scale: toV2(c.scale),
                 texture: c.texture,
                 transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
             },
         };
     }
@@ -188,9 +220,11 @@ function componentToProto(c: Component): ProtoComponent {
             cylinder: {
                 position: toV3(c.position),
                 rotation: toV3(c.rotation),
-                size: toV3(c.size),
+                scale: toV3(c.scale),
                 texture: c.texture,
                 transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
             },
         };
     }
@@ -199,14 +233,36 @@ function componentToProto(c: Component): ProtoComponent {
             sphere: {
                 position: toV3(c.position),
                 rotation: toV3(c.rotation),
-                size: toV3(c.size),
+                scale: toV3(c.scale),
                 texture: c.texture,
                 transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
+            },
+        };
+    }
+    if (c.type === 'sprite') {
+        return {
+            sprite: {
+                position: toV3(c.position),
+                scale: toV2(c.scale),
+                texture: c.texture,
+                transparent: c.transparent,
+                repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+                repeatY: c.repeatY !== 1 ? c.repeatY : 0,
             },
         };
     }
     return {
-        sprite: { position: toV3(c.position), size: toV2(c.size), texture: c.texture, transparent: c.transparent },
+        fbxModel: {
+            position: toV3(c.position),
+            rotation: toV3(c.rotation),
+            scale: toV3(c.scale),
+            model: c.model,
+            texture: c.texture,
+            repeatX: c.repeatX !== 1 ? c.repeatX : 0,
+            repeatY: c.repeatY !== 1 ? c.repeatY : 0,
+        } satisfies ProtoFbxModelComponent,
     };
 }
 
@@ -250,11 +306,23 @@ function instanceToProto(o: ObjectInstance): ProtoObjectInstance {
 }
 
 function protoToTerrainLayer(l: ProtoTerrainLayer): TerrainLayer {
-    return { id: bytesToUuid(l.id), name: l.name || undefined, texture: l.texture, repeat: l.repeat };
+    return {
+        id: bytesToUuid(l.id),
+        name: l.name || undefined,
+        texture: l.texture,
+        repeatX: l.repeatX || 1,
+        repeatY: l.repeatY || 1,
+    };
 }
 
 function terrainLayerToProto(l: TerrainLayer): ProtoTerrainLayer {
-    return { id: uuidToBytes(l.id), name: l.name ?? '', texture: l.texture, repeat: l.repeat };
+    return {
+        id: uuidToBytes(l.id),
+        name: l.name ?? '',
+        texture: l.texture,
+        repeatX: l.repeatX !== 1 ? l.repeatX : 0,
+        repeatY: l.repeatY !== 1 ? l.repeatY : 0,
+    };
 }
 
 function protoToRegion(r: ProtoRegion): Region {
@@ -272,6 +340,8 @@ function protoToTerrain(t: ProtoTerrain): Terrain {
         cellSize: t.cellSize,
         heights: decodeHeights(t.heights),
         texture: t.texture,
+        repeatX: t.repeatX || 1,
+        repeatY: t.repeatY || 1,
         layers: t.layers.map(protoToTerrainLayer),
         layerWeights: decodeLayerWeights(t.layerWeights),
         regionMap: Array.from(t.regionMap),
@@ -285,6 +355,8 @@ function terrainToProto(t: Terrain): ProtoTerrain {
         cellSize: t.cellSize,
         heights: encodeHeights(t.heights),
         texture: t.texture,
+        repeatX: t.repeatX !== 1 ? t.repeatX : 0,
+        repeatY: t.repeatY !== 1 ? t.repeatY : 0,
         layers: t.layers.map(terrainLayerToProto),
         layerWeights: encodeLayerWeights(t.layerWeights),
         regionMap: new Uint8Array(t.regionMap),
@@ -362,6 +434,19 @@ export async function uploadTexture(file: File): Promise<string> {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
     const destPath = `data/map/textures/${file.name}`;
+    const res = await fetch('/api/write-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: destPath, content: uint8ToBase64(bytes), binary: true }),
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return destPath;
+}
+
+export async function uploadModel(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const destPath = `data/map/models/${file.name}`;
     const res = await fetch('/api/write-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
