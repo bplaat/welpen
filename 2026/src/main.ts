@@ -209,6 +209,13 @@ async function main(): Promise<void> {
             statsTime = 0;
         }
     }
+    requestAnimationFrame(() => {
+        const loading = document.getElementById('loading');
+        if (loading) {
+            loading.style.opacity = '0';
+            loading.addEventListener('transitionend', () => loading.remove(), { once: true });
+        }
+    });
     frame();
 }
 

@@ -10,8 +10,39 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
         <title>Welpen Game 2026: ?</title>
         <link rel="icon" href="data:," />
+        <style>
+            html,
+            body {
+                margin: 0;
+                background: #000;
+            }
+            #loading {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #000;
+                z-index: 9999;
+                transition: opacity 0.4s;
+            }
+            #loading > span {
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255, 255, 255, 0.15);
+                border-top-color: #fff;
+                border-radius: 50%;
+                animation: spin 0.75s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
     </head>
     <body>
+        <div id="loading"><span></span></div>
         <div id="stats"></div>
         <div id="instructions">
             Click to capture mouse &bull; WASD move &bull; Mouse look &bull; Shift sprint &bull; Space jump &bull; Esc
